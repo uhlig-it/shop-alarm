@@ -1,23 +1,53 @@
 require 'evdev'
-require 'forwardable'
 
 class Buffer
-  extend Forwardable
-
-  def_delegator :@chars, :to_s
-  def_delegator :@chars, :chop!
-  def_delegator :@chars, :empty?
-
-  def initialize
+  def initialize(timeout = 3)
+    @timeout = timeout
     reset
   end
 
   def append(char)
-    @chars << char
+    writing do
+      @chars << char
+    end
+  end
+
+  def chop!
+    writing do
+      @chars.chop!
+    end
   end
 
   def reset
     @chars = ''
+    @last_changed = Time.now
+  end
+
+  def empty?
+    reading do
+      @chars.empty?
+    end
+  end
+
+  def to_s
+    reading do
+      @chars.to_s
+    end
+  end
+
+  private
+
+  # reset if needed
+  def reading(&block)
+    reset if Time.now - @last_changed > @timeout
+    block.call
+  end
+
+  # reset if needed and DO update the last_changed timestamp
+  def writing(&block)
+    reading(&block)
+  ensure
+    @last_changed = Time.now
   end
 end
 
@@ -81,9 +111,9 @@ class Keypad
     :KEY_BACKSPACE  => ChopCommand.new,
   }
 
-  def initialize(device)
+  def initialize(device:, timeout: 3)
     @keyboard = Evdev.new(device)
-    @buffer = Buffer.new
+    @buffer = Buffer.new(timeout)
 
     @keyboard.on(*ACTIONS.keys) do |state, key|
       case state
@@ -114,7 +144,7 @@ class Keypad
   end
 end
 
-kp = Keypad.new('/dev/input/event0')
+kp = Keypad.new(device: '/dev/input/event0')
 warn 'Ready'
 kp.start!
 
@@ -122,7 +152,6 @@ __END__
 
 TODO
 
-* Timeout
 * Command line args
 * MQTT
 * Tests?
