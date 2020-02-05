@@ -1,4 +1,6 @@
-require 'evdev'
+#!/usr/bin/env ruby
+
+require 'optparse'
 
 class Buffer
   def initialize(timeout = 3)
@@ -112,6 +114,7 @@ class Keypad
   }
 
   def initialize(device:, timeout: 3)
+    require 'evdev'
     @keyboard = Evdev.new(device)
     @buffer = Buffer.new(timeout)
 
@@ -144,7 +147,29 @@ class Keypad
   end
 end
 
-kp = Keypad.new(device: '/dev/input/event0')
+options = {
+  device: '/dev/input/event0',
+  timeout: 3,
+}
+
+OptionParser.new do |opts|
+  opts.banner = <<~EOM
+    Publishes keyboard input to an MQTT topic.
+
+    Options:
+  EOM
+  opts.version = '1.0.0'
+
+  opts.on('--device DEVICE', 'The device file that provides the input') do |device|
+    options[:device] = device
+  end
+
+  opts.on('--timeout SECONDS', 'Timeout in seconds after which input that was not already sent is discarded') do |timeout|
+    options[:timeout] = timeout.to_i
+  end
+end.parse!
+
+kp = Keypad.new(options)
 warn 'Ready'
 kp.start!
 
@@ -153,6 +178,9 @@ __END__
 TODO
 
 * Command line args
+    --mqtt-host MQTT_HOST
+    --topic TOPIC
+    --verbose
 * MQTT
 * Tests?
 * Can we [blink the LED](https://hewner.github.io/2006/08/21/evdev-for-ruby-with-morse-code/)?
