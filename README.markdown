@@ -1,4 +1,4 @@
-# Disarm
+# MQTT Keyboard
 
 Listens to an input device via `evdev` and, on Enter, publishes the entered text to an MQTT topic. A listener would than, on message, disable the alarm system.
 
@@ -6,7 +6,7 @@ Listens to an input device via `evdev` and, on Enter, publishes the entered text
 
 ```command
 $ apt install --yes ruby ruby-dev libevdev-dev
-$ sudo gem install evdev
+$ sudo gem install evdev mqtt
 ```
 
 # Synopsis
@@ -14,15 +14,15 @@ $ sudo gem install evdev
 Example:
 
 ```command
-$ disarm --device DEVICE --topic TOPIC --timeout TIMEOUT --mqtt-host MQTT_HOST
+$ mqtt-keyboard --device DEVICE --topic TOPIC --timeout TIMEOUT --mqtt MQTT_URL
 ```
 
-The program will start to listen for events on `DEVICE`. When `ENTER` is pressed, any input that was typed within `TIMEOUT` will be published to the `TOPIC` at [`MQTT_HOST`](https://github.com/mqtt/mqtt.github.io/wiki/URI-Scheme).
+The program will start to listen for events on `DEVICE`. When `ENTER` is pressed, any input that was typed within `TIMEOUT` will be published to the `TOPIC` at [`MQTT_URL`](https://github.com/mqtt/mqtt.github.io/wiki/URI-Scheme).
 
 Example:
 
 ```command
-$ disarm --device /dev/input/event0 --topic oldpi/keyboard --timeout 3 --mqtt-host mqtts://user:password@example.com
+$ mqtt-keyboard --device /dev/input/event0 --timeout 3 --mqtt-host mqtts://user:password@example.com --topic oldpi/keyboard
 ```
 
 Anything typed on `/dev/input/event0` will be published to `oldpi/keyboard`. If there are more than 3 seconds between two consecutive keystrokes, all previous input will be ignored.

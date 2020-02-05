@@ -1,6 +1,11 @@
 #!/usr/bin/env ruby
 
+require 'rubygems'
+require 'bundler/setup'
+
 require 'optparse'
+require 'mqtt'
+require 'evdev' if RUBY_PLATFORM =~ /linux/
 
 class Buffer
   def initialize(timeout = 3)
@@ -63,15 +68,27 @@ class AppendCommand
   end
 end
 
-class SendCommand
-  def initialize(mqtt)
-    @mqtt = mqtt
+class DummySendCommand
+  def call(buffer)
+    return if buffer.empty?
+    warn "NOT Sending anywhere: #{buffer}"
+    buffer.reset
+  end
+end
+
+class PublishCommand
+  def initialize(url:, topic:, verbose: false)
+    @mqtt = MQTT::Client.new(url)
+    @mqtt.connect
+    @topic = topic
   end
 
   def call(buffer)
     return if buffer.empty?
     warn "Sending #{buffer}"
+    @mqtt.publish(@topic, buffer)
     buffer.reset
+    warn 'Done'
   end
 end
 
@@ -92,36 +109,40 @@ class ChopCommand
 end
 
 class Keypad
-  ACTIONS = {
-    :KEY_KP0        => AppendCommand.new('0'),
-    :KEY_KP1        => AppendCommand.new('1'),
-    :KEY_KP2        => AppendCommand.new('2'),
-    :KEY_KP3        => AppendCommand.new('3'),
-    :KEY_KP4        => AppendCommand.new('4'),
-    :KEY_KP5        => AppendCommand.new('5'),
-    :KEY_KP6        => AppendCommand.new('6'),
-    :KEY_KP7        => AppendCommand.new('7'),
-    :KEY_KP8        => AppendCommand.new('8'),
-    :KEY_KP9        => AppendCommand.new('9'),
-    :KEY_KPPLUS     => AppendCommand.new('+'),
-    :KEY_KPMINUS    => AppendCommand.new('-'),
-    :KEY_KPASTERISK => AppendCommand.new('*'),
-    :KEY_KPSLASH    => AppendCommand.new('/'),
-    :KEY_KPDOT      => AppendCommand.new('.'),
-    :KEY_NUMLOCK    => PrintCommand.new,
-    :KEY_KPENTER    => SendCommand.new(nil),
-    :KEY_BACKSPACE  => ChopCommand.new,
-  }
-
-  def initialize(device:, timeout: 3)
-    require 'evdev'
+  def initialize(device:, timeout: 3, verbose: false)
     @keyboard = Evdev.new(device)
     @buffer = Buffer.new(timeout)
+    @actions = {
+      :KEY_KP0        => AppendCommand.new('0'),
+      :KEY_KP1        => AppendCommand.new('1'),
+      :KEY_KP2        => AppendCommand.new('2'),
+      :KEY_KP3        => AppendCommand.new('3'),
+      :KEY_KP4        => AppendCommand.new('4'),
+      :KEY_KP5        => AppendCommand.new('5'),
+      :KEY_KP6        => AppendCommand.new('6'),
+      :KEY_KP7        => AppendCommand.new('7'),
+      :KEY_KP8        => AppendCommand.new('8'),
+      :KEY_KP9        => AppendCommand.new('9'),
+      :KEY_KPPLUS     => AppendCommand.new('+'),
+      :KEY_KPMINUS    => AppendCommand.new('-'),
+      :KEY_KPASTERISK => AppendCommand.new('*'),
+      :KEY_KPSLASH    => AppendCommand.new('/'),
+      :KEY_KPDOT      => AppendCommand.new('.'),
+      :KEY_NUMLOCK    => PrintCommand.new,
+      :KEY_KPENTER    => DummySendCommand.new,
+      :KEY_BACKSPACE  => ChopCommand.new,
+    }
+  end
 
-    @keyboard.on(*ACTIONS.keys) do |state, key|
+  def register(key, command)
+    @actions[key] = command
+  end
+
+  def start!
+    @keyboard.on(*keys) do |state, key|
       case state
       when 0 # released
-        ACTIONS[key].call(@buffer)
+        command(key).call(@buffer)
       when 1 # pressed
         # ignored
       when 2 # repeated
@@ -130,9 +151,7 @@ class Keypad
         raise "Don't know what to do with state #{state}"
       end
     end
-  end
 
-  def start!
     loop do
       begin
         @keyboard.handle_event
@@ -145,11 +164,28 @@ class Keypad
       end
     end
   end
+
+  private
+
+  def keys
+    @actions.keys
+  end
+
+  def command(key)
+    @actions.fetch(key)
+  end
 end
 
 options = {
-  device: '/dev/input/event0',
-  timeout: 3,
+  keypad: {
+    device: '/dev/input/event0',
+    timeout: 3,
+  },
+  mqtt: {
+    url: nil,
+    topic: nil,
+  },
+  verbose: false,
 }
 
 OptionParser.new do |opts|
@@ -161,26 +197,52 @@ OptionParser.new do |opts|
   opts.version = '1.0.0'
 
   opts.on('--device DEVICE', 'The device file that provides the input') do |device|
-    options[:device] = device
+    options[:keypad][:device] = device
   end
 
   opts.on('--timeout SECONDS', 'Timeout in seconds after which input that was not already sent is discarded') do |timeout|
-    options[:timeout] = timeout.to_i
+    options[:keypad][:timeout] = timeout.to_i
+  end
+
+  opts.on('-v', '--[no-]verbose', 'Run verbosely') do |v|
+    options[:verbose] = v
+  end
+
+  opts.on('--mqtt MQTT-URI', 'The URI to the MQTT server') do |mqtt|
+    options[:mqtt][:url] = mqtt
+  end
+
+  opts.on('--topic TOPIC', 'The MQTT topic where the input is published to') do |topic|
+    options[:mqtt][:topic] = topic
   end
 end.parse!
 
-kp = Keypad.new(options)
-warn 'Ready'
-kp.start!
+begin
+  kp = Keypad.new(
+    device: options[:keypad][:device],
+    timeout: options[:keypad][:timeout],
+    verbose: options[:verbose]
+  )
 
+  kp.register(
+    :KEY_KPENTER,
+    PublishCommand.new(
+      url: options[:mqtt][:url],
+      topic: options[:mqtt][:topic],
+      verbose: options[:verbose]
+    )
+  )
+  warn 'Ready to accept keyboard events' if options[:verbose]
+  kp.start!
+rescue => err
+  warn "Error: #{err.message}"
+  warn err.backtrace.join("\n") if options[:verbose]
+  exit 1
+end
 __END__
 
 TODO
 
-* Command line args
-    --mqtt-host MQTT_HOST
-    --topic TOPIC
-    --verbose
-* MQTT
+* Use MAC address as client ID (there shall be only one keyboard; the last one connecting wins)
 * Tests?
 * Can we [blink the LED](https://hewner.github.io/2006/08/21/evdev-for-ruby-with-morse-code/)?
