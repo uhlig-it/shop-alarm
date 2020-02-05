@@ -1,62 +1,97 @@
 require 'evdev'
+require 'forwardable'
 
-buffer = ''
+class Buffer
+  extend Forwardable
 
-KEYPAD = {
-  :KEY_KP0        => '0',
-  :KEY_KP1        => '1',
-  :KEY_KP2        => '2',
-  :KEY_KP3        => '3',
-  :KEY_KP4        => '4',
-  :KEY_KP5        => '5',
-  :KEY_KP6        => '6',
-  :KEY_KP7        => '7',
-  :KEY_KP8        => '8',
-  :KEY_KP9        => '9',
-  :KEY_KPPLUS     => '+',
-  :KEY_KPMINUS    => '-',
-  :KEY_KPASTERISK => '*',
-  :KEY_KPSLASH    => '/',
-  :KEY_KPDOT      => '.',
-  :KEY_NUMLOCK    => lambda { warn "Current buffer is #{buffer}" },
-  :KEY_KPENTER    => lambda { warn "Sending #{buffer}"; buffer = '' },
-  :KEY_BACKSPACE  => lambda { warn 'TODO backspace' },
-}
+  def_delegator :@chars, :to_s
+  def_delegator :@chars, :chop!
+  def_delegator :@chars, :empty?
 
-keyboard = Evdev.new('/dev/input/event0')
+  def initialize
+    reset
+  end
 
-keyboard.on(*KEYPAD.keys) do |state, key|
-  case state
-  when 0
-    action = KEYPAD[key]
-    action.call rescue buffer << action
-  when 1
-    # warn "Pressed #{KEYPAD[key]}"
-  when 2
-    # warn "Woah, slow down with that #{key}!"
-  else
-    raise "What? #{state}"
+  def append(char)
+    @chars << char
+  end
+
+  def reset
+    @chars = ''
   end
 end
 
+class Keypad
+  ACTIONS = {
+    :KEY_KP0        => '0',
+    :KEY_KP1        => '1',
+    :KEY_KP2        => '2',
+    :KEY_KP3        => '3',
+    :KEY_KP4        => '4',
+    :KEY_KP5        => '5',
+    :KEY_KP6        => '6',
+    :KEY_KP7        => '7',
+    :KEY_KP8        => '8',
+    :KEY_KP9        => '9',
+    :KEY_KPPLUS     => '+',
+    :KEY_KPMINUS    => '-',
+    :KEY_KPASTERISK => '*',
+    :KEY_KPSLASH    => '/',
+    :KEY_KPDOT      => '.',
+    :KEY_NUMLOCK    => lambda { |buffer| warn "Current buffer is #{buffer}" },
+    :KEY_KPENTER    => lambda { |buffer| warn "Sending #{buffer}"; buffer.reset },
+    :KEY_BACKSPACE  => lambda { |buffer| buffer.chop! },
+  }
+
+  def initialize(device)
+    @keyboard = Evdev.new(device)
+
+    @keyboard.on(*ACTIONS.keys) do |state, key|
+      case state
+      when 0
+        action = ACTIONS[key]
+
+        if action.respond_to?(:call)
+          action.call(@buffer)
+        else
+          @buffer.append(action)
+        end
+      when 1
+        # warn "Pressed #{ACTIONS[key]}"
+      when 2
+        # warn "Woah, slow down with that #{key}!"
+      else
+        raise "What? #{state}"
+      end
+    end
+
+    @buffer = Buffer.new
+  end
+
+  def start!
+    loop do
+      begin
+        @keyboard.handle_event
+      rescue Evdev::AwaitEvent
+        Kernel.select([@keyboard.event_channel])
+        retry
+      rescue Interrupt
+        warn "Discarding #{@buffer}" unless @buffer.empty?
+        return
+      end
+    end
+  end
+end
+
+kp = Keypad.new('/dev/input/event0')
 warn 'Ready'
-
-loop do
-  begin
-    keyboard.handle_event
-  rescue Evdev::AwaitEvent
-    Kernel.select([keyboard.event_channel])
-    retry
-  end
-end
+kp.start!
 
 __END__
 
 TODO
 
-* Encapsulate buffer in a class
 * Timeout
-* Backspace
 * Do not send empty buffer
 * Command line args
 * MQTT

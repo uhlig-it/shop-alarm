@@ -1,6 +1,6 @@
 # Disarm
 
-Listens to an input device via `evdev` and, on Enter, publishes the entered text to an MQTT topic.
+Listens to an input device via `evdev` and, on Enter, publishes the entered text to an MQTT topic. A listener would than, on message, disable the alarm system.
 
 # Installation
 
