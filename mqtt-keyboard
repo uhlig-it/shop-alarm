@@ -6,10 +6,13 @@ require 'bundler/setup'
 require 'optparse'
 require 'mqtt'
 require 'evdev' if RUBY_PLATFORM =~ /linux/
+require 'logger'
+require 'pathname'
 
 class Buffer
-  def initialize(timeout = 3)
+  def initialize(timeout:, logger:)
     @timeout = timeout
+    @logger = logger
     reset
   end
 
@@ -26,6 +29,7 @@ class Buffer
   end
 
   def reset
+    @logger.debug(self.class.name) { 'Resetting' }
     @chars = ''
     @last_changed = Time.now
   end
@@ -44,13 +48,21 @@ class Buffer
 
   private
 
-  # reset if needed
+  #
+  # before returning the current content, check if reset is needed because of age
+  #
   def reading(&block)
-    reset if Time.now - @last_changed > @timeout
+    age = Time.now - @last_changed
+
+    if age > @timeout && !@chars.empty?
+      @logger.debug(self.class.name) { "Content is #{age.truncate(1)} s old (max is #{@timeout} s)" }
+      reset
+    end
+
     block.call
   end
 
-  # reset if needed and DO update the last_changed timestamp
+  # reset if needed and then update the last_changed timestamp
   def writing(&block)
     reading(&block)
   ensure
@@ -58,79 +70,116 @@ class Buffer
   end
 end
 
-class AppendCommand
-  def initialize(char)
-    @char = char
+module Commands
+  class Base
+    def initialize(logger:)
+      @logger = logger
+    end
+
+    def to_s
+      self.class.name
+    end
+
+    def debug(message)
+      @logger.debug(self) { message }
+    end
+
+    def info(message)
+      @logger.info(self) { message }
+    end
+
+    def warn(message)
+      @logger.warn(self) { message }
+    end
   end
 
-  def call(buffer)
-    buffer.append(@char)
-  end
-end
+  class Append < Base
+    def initialize(char, logger:)
+      super(logger: logger)
+      @char = char
+    end
 
-class DummySendCommand
-  def call(buffer)
-    return if buffer.empty?
-    warn "NOT Sending anywhere: #{buffer}"
-    buffer.reset
-  end
-end
-
-class PublishCommand
-  def initialize(url:, topic:, verbose: false)
-    @mqtt = MQTT::Client.new(url)
-    @mqtt.connect
-    @topic = topic
+    def call(buffer)
+      debug "Appending #{@char} to '#{buffer}'"
+      buffer.append(@char)
+    end
   end
 
-  def call(buffer)
-    return if buffer.empty?
-    warn "Sending #{buffer}"
-    @mqtt.publish(@topic, buffer)
-    buffer.reset
-    warn 'Done'
+  class DummySend < Base
+    def call(buffer)
+      return if buffer.empty?
+      self.warn "NOT sending '#{buffer}' anywhere"
+      buffer.reset
+    end
   end
-end
 
-class PrintCommand
-  def call(buffer)
-    if buffer.empty?
-      warn 'Current buffer is empty'
-    else
-      warn "Current buffer is #{buffer}"
+  class Publish < Base
+    def initialize(url:, topic:, logger:)
+      super(logger: logger)
+      @mqtt = MQTT::Client.new(url)
+      @mqtt.connect
+      @topic = topic
+      @logger = logger
+    end
+
+    def call(buffer)
+      if buffer.empty?
+        debug "NOT publishing because buffer is empty"
+        return
+      end
+
+      debug "Publishing '#{buffer}' to '#{@topic}'"
+      @mqtt.publish(@topic, buffer)
+      debug "Success"
+
+      buffer.reset
+    end
+  end
+
+  class Print < Base
+    def call(buffer)
+      if buffer.empty?
+        info 'Buffer is empty'
+      else
+        info "Buffer is #{buffer}"
+      end
+    end
+  end
+
+  class Chop < Base
+    def call(buffer)
+      chopped = buffer.chop!
+      info "Chopped off #{chopped}"
     end
   end
 end
 
-class ChopCommand
-  def call(buffer)
-    buffer.chop!
-  end
-end
-
 class Keypad
-  def initialize(device:, timeout: 3, verbose: false)
+  STATI = %w[released pressed repeated]
+
+  def initialize(device:, timeout: , logger:)
     @keyboard = Evdev.new(device)
-    @buffer = Buffer.new(timeout)
+    @buffer = Buffer.new(timeout: timeout, logger: logger)
+    @logger = logger
     @actions = {
-      :KEY_KP0        => AppendCommand.new('0'),
-      :KEY_KP1        => AppendCommand.new('1'),
-      :KEY_KP2        => AppendCommand.new('2'),
-      :KEY_KP3        => AppendCommand.new('3'),
-      :KEY_KP4        => AppendCommand.new('4'),
-      :KEY_KP5        => AppendCommand.new('5'),
-      :KEY_KP6        => AppendCommand.new('6'),
-      :KEY_KP7        => AppendCommand.new('7'),
-      :KEY_KP8        => AppendCommand.new('8'),
-      :KEY_KP9        => AppendCommand.new('9'),
-      :KEY_KPPLUS     => AppendCommand.new('+'),
-      :KEY_KPMINUS    => AppendCommand.new('-'),
-      :KEY_KPASTERISK => AppendCommand.new('*'),
-      :KEY_KPSLASH    => AppendCommand.new('/'),
-      :KEY_KPDOT      => AppendCommand.new('.'),
-      :KEY_NUMLOCK    => PrintCommand.new,
-      :KEY_KPENTER    => DummySendCommand.new,
-      :KEY_BACKSPACE  => ChopCommand.new,
+      :KEY_KP0        => Commands::Append.new('0', logger: logger),
+      :KEY_KP1        => Commands::Append.new('1', logger: logger),
+      :KEY_KP2        => Commands::Append.new('2', logger: logger),
+      :KEY_KP3        => Commands::Append.new('3', logger: logger),
+      :KEY_KP4        => Commands::Append.new('4', logger: logger),
+      :KEY_KP5        => Commands::Append.new('5', logger: logger),
+      :KEY_KP6        => Commands::Append.new('6', logger: logger),
+      :KEY_KP7        => Commands::Append.new('7', logger: logger),
+      :KEY_KP8        => Commands::Append.new('8', logger: logger),
+      :KEY_KP9        => Commands::Append.new('9', logger: logger),
+      :KEY_KPPLUS     => Commands::Append.new('+', logger: logger),
+      :KEY_KPMINUS    => Commands::Append.new('-', logger: logger),
+      :KEY_KPASTERISK => Commands::Append.new('*', logger: logger),
+      :KEY_KPSLASH    => Commands::Append.new('/', logger: logger),
+      :KEY_KPDOT      => Commands::Append.new('.', logger: logger),
+      :KEY_NUMLOCK    => Commands::Print.new(logger: logger),
+      :KEY_KPENTER    => Commands::DummySend.new(logger: logger),
+      :KEY_BACKSPACE  => Commands::Chop.new(logger: logger),
     }
   end
 
@@ -139,10 +188,16 @@ class Keypad
   end
 
   def start!
+    @logger.debug(self.class.name) { "Registering handlers for #{keys}" }
+
     @keyboard.on(*keys) do |state, key|
+      @logger.debug(self.class.name) { "Key #{key} was #{STATI[state]}" }
+
       case state
       when 0 # released
-        command(key).call(@buffer)
+        command = command(key)
+        @logger.info(self.class.name) { "Calling #{command} with buffer '#{@buffer}'" }
+        command.call(@buffer)
       when 1 # pressed
         # ignored
       when 2 # repeated
@@ -152,6 +207,8 @@ class Keypad
       end
     end
 
+    @logger.info(self.class.name) { 'Ready to accept keyboard events' }
+
     loop do
       begin
         @keyboard.handle_event
@@ -159,7 +216,7 @@ class Keypad
         Kernel.select([@keyboard.event_channel])
         retry
       rescue Interrupt
-        warn "Discarding #{@buffer}" unless @buffer.empty?
+        @logger.warn(self.class.name) { "Discarding '#{@buffer}'" } unless @buffer.empty?
         return
       end
     end
@@ -185,8 +242,11 @@ options = {
     url: nil,
     topic: nil,
   },
-  verbose: false,
 }
+
+logger = Logger.new(STDERR)
+logger.level = Logger::FATAL
+logger.progname = Pathname(__FILE__).basename
 
 OptionParser.new do |opts|
   opts.banner = <<~EOM
@@ -204,8 +264,8 @@ OptionParser.new do |opts|
     options[:keypad][:timeout] = timeout.to_i
   end
 
-  opts.on('-v', '--[no-]verbose', 'Run verbosely') do |v|
-    options[:verbose] = v
+  opts.on('-v', '--verbose', 'Run verbosely. Repeat for even more verbosity.') do
+    logger.level = logger.level - 1 if logger.level > 0
   end
 
   opts.on('--mqtt MQTT-URI', 'The URI to the MQTT server') do |mqtt|
@@ -221,24 +281,24 @@ begin
   kp = Keypad.new(
     device: options[:keypad][:device],
     timeout: options[:keypad][:timeout],
-    verbose: options[:verbose]
+    logger: logger
   )
 
   kp.register(
     :KEY_KPENTER,
-    PublishCommand.new(
+    Commands::Publish.new(
       url: options[:mqtt][:url],
       topic: options[:mqtt][:topic],
-      verbose: options[:verbose]
+      logger: logger
     )
   )
-  warn 'Ready to accept keyboard events' if options[:verbose]
   kp.start!
 rescue => err
   warn "Error: #{err.message}"
-  warn err.backtrace.join("\n") if options[:verbose]
+  logger.error err.backtrace.join("\n")
   exit 1
 end
+
 __END__
 
 TODO
