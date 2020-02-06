@@ -1,0 +1,83 @@
+#!/usr/bin/env ruby
+
+require 'rubygems'
+require 'bundler/setup'
+
+require 'optparse'
+require 'logger'
+require 'pathname'
+require 'mqtt'
+
+require_relative '../lib/mqtt/keyboard/buffer'
+require_relative '../lib/mqtt/keyboard/commands'
+require_relative '../lib/mqtt/keyboard/keypad'
+
+options = {
+  keypad: {
+    device: '/dev/input/event0',
+    timeout: 3,
+  },
+  mqtt: {
+    url: nil,
+    topic: nil,
+  },
+}
+
+logger = Logger.new(STDERR)
+logger.level = Logger::FATAL
+logger.progname = Pathname(__FILE__).basename
+
+OptionParser.new do |opts|
+  opts.banner = <<~EOM
+    Publishes keyboard input to an MQTT topic.
+
+    Options:
+  EOM
+  opts.version = '1.0.0'
+
+  opts.on('--device DEVICE', 'The device file that provides the input') do |device|
+    options[:keypad][:device] = device
+  end
+
+  opts.on('--timeout SECONDS', 'Timeout in seconds after which input that was not already sent is discarded') do |timeout|
+    options[:keypad][:timeout] = timeout.to_i
+  end
+
+  opts.on('-v', '--verbose', 'Run verbosely. Repeat for even more verbosity.') do
+    logger.level = logger.level - 1 if logger.level > 0
+  end
+
+  opts.on('--mqtt MQTT-URI', 'The URI to the MQTT server') do |mqtt|
+    options[:mqtt][:url] = mqtt
+  end
+
+  opts.on('--topic TOPIC', 'The MQTT topic where the input is published to') do |topic|
+    options[:mqtt][:topic] = topic
+  end
+end.parse!
+
+begin
+  kp = MQTT::Keyboard::Keypad.new(
+    device: options[:keypad][:device],
+    timeout: options[:keypad][:timeout],
+    logger: logger
+  )
+
+  kp.register(
+    :KEY_KPENTER,
+    MQTT::Keyboard::Commands::Publish.new(
+      url: options[:mqtt][:url],
+      topic: options[:mqtt][:topic],
+      logger: logger
+    )
+  )
+
+  kp.start!
+rescue MQTT::ProtocolException
+  logger.error err.backtrace.join("\n")
+  retry
+rescue => err
+  logger.error(err)
+  logger.error err.backtrace.join("\n")
+  exit 1
+end

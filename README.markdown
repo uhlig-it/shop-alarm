@@ -26,3 +26,9 @@ $ mqtt-keyboard --device /dev/input/event0 --timeout 3 --mqtt-host mqtts://user:
 ```
 
 Anything typed on `/dev/input/event0` will be published to `oldpi/keyboard`. If there are more than 3 seconds between two consecutive keystrokes, all previous input will be ignored.
+
+# TODO
+
+* Use MAC address as client ID (there shall be only one keyboard; the last one connecting wins)
+* Tests?
+* Can we [blink the LED](https://hewner.github.io/2006/08/21/evdev-for-ruby-with-morse-code/)?
