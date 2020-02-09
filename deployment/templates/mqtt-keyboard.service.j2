@@ -1,0 +1,20 @@
+[Unit]
+Description=mqtt-keyboard
+Documentation=https://github.com/suhlig/mqtt-disarm
+After=network-online.target
+
+[Service]
+ExecStart=/opt/mqtt-disarm/bin/mqtt-keyboard    \
+            --device {{ mqtt_disarm_device }}   \
+            --timeout {{ mqtt_disarm_timeout }} \
+            --mqtt {{ mqtt_disarm_mqtt_url }}   \
+            --topic {{ mqtt_disarm_keyboard_topic }}     \
+            --verbose
+Type=simple
+Restart=on-failure
+# TODO User=mqtt-disarm
+# TODO Group=mqtt-disarm
+
+[Install]
+WantedBy=default.target
+Alias=mqtt-keyboard.service
