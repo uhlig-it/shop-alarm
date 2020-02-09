@@ -1,5 +1,5 @@
 require 'blink1'
-require_relative 'message_parser'
+require_relative 'interpreter'
 
 module MQTT
   module Blink1
@@ -18,7 +18,7 @@ module MQTT
 
         @mqtt.get(@topic) do |topic, message|
           @logger.debug(self.class.name) { "Received in #{topic}: #{message}" }
-          @interpreter.interpret(message))
+          @interpreter.interpret(message)
         rescue Interpreter::Error => e
           @logger.error(self.class.name) { e.message }
         end
