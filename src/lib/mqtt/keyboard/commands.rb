@@ -1,5 +1,3 @@
-require 'mqtt'
-
 module MQTT
   module Keyboard
     module Commands
@@ -46,10 +44,9 @@ module MQTT
       end
 
       class Publish < Base
-        def initialize(url:, topic:, logger:)
+        def initialize(mqtt:, topic:, logger:)
           super(logger: logger)
-          @mqtt = MQTT::Client.new(url)
-          @mqtt.connect
+          @mqtt = mqtt
           @topic = topic
           @logger = logger
         end
