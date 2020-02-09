@@ -5,7 +5,7 @@ source 'https://rubygems.org'
 gem 'evdev' if RUBY_PLATFORM =~ /linux/
 gem 'mqtt'
 gem 'http', '~> 4.3'
-# gem 'rb-blink1'
+gem 'rb-blink1'
 
 group :development do
   gem 'bundler', '~> 2.1'

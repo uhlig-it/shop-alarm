@@ -1,0 +1,61 @@
+#!/usr/bin/env ruby
+
+require 'rubygems'
+require 'bundler/setup'
+
+require 'optparse'
+require 'logger'
+require 'pathname'
+require 'mqtt'
+
+require_relative '../lib/blink1/mqtt'
+
+options = {
+  mqtt: {
+    url: nil,
+  },
+  topic: nil,
+}
+
+logger = Logger.new(STDERR)
+logger.level = Logger::FATAL
+logger.progname = Pathname(__FILE__).basename
+
+OptionParser.new do |opts|
+  opts.banner = <<~EOM
+    Subscribes an MQTT topic and translates messages into Blink1 patterns
+
+    Options:
+  EOM
+  opts.version = '1.0.0'
+
+  opts.on('-v', '--verbose', 'Run verbosely. Repeat for even more verbosity.') do
+    logger.level = logger.level - 1 if logger.level > 0
+  end
+
+  opts.on('--mqtt=MQTT_URI', 'The URI to the MQTT server') do |mqtt|
+    options[:mqtt][:url] = mqtt
+  end
+
+  opts.on('--topic=TOPIC', 'The MQTT topic where the blink1 message is expected') do |topic|
+    options[:topic] = topic
+  end
+end.parse!
+
+begin
+  logger.info "Log level is #{%w[DEBUG INFO WARN ERROR FATAL UNKNOWN][logger.level]}"
+  logger.debug "Alarm will be disarmed when code #{options[:code]} was received"
+
+  Blink1::MQTT.new(
+    mqtt: MQTT::Client.connect(options[:mqtt][:url]),
+    topic: options[:topic],
+    logger: logger
+  ).start!
+rescue MQTT::ProtocolException => err
+  logger.error err.backtrace.join("\n")
+  retry
+rescue => err
+  logger.error(err)
+  logger.error err.backtrace.join("\n")
+  exit 1
+end
