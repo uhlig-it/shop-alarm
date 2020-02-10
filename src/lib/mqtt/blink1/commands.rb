@@ -20,12 +20,19 @@ module MQTT
           color
         end
 
-        def validate_numericality(value, key)
+        def validate_numericality(value, key, type = Integer)
           unless value.is_a? Numeric
             raise UnexpectedMessageFormat, "#{key} must be numeric, but it is #{value}"
           end
 
-          value.to_i
+          case type
+          when Integer
+            value.to_i
+          when Float
+            value.to_f
+          else
+            value
+          end
         end
       end
 
@@ -96,6 +103,12 @@ module MQTT
           blink1.random(
             validate_numericality(args['count'], 'random.count')
           )
+        end
+      end
+
+      class Sleep < Base
+        def call(args)
+          sleep(validate_numericality(args['time'], 'sleep.time', Float))
         end
       end
 

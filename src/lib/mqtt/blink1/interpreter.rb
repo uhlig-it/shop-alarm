@@ -12,18 +12,22 @@ module MQTT
         @blink1 = device
       end
 
-      def interpret(msg)
-        message = JSON.parse(msg)
-
-        if message.is_a?(Hash)
+      def interpret(payload)
+        case message = JSON.parse(payload)
+        when Hash
           if message.keys.size != 1
             raise UnexpectedMessageFormat, "Expecting excactly one key, but got #{message.keys}"
           end
 
           key = message.keys.first
           produceCommand(key).call(message[key])
-        else
+        when Array
+          message.each do |msg|
+            interpret(msg.to_json)
+          end
+        when String
           produceCommand(message).call
+        else
         end
       end
 

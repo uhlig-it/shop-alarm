@@ -355,4 +355,45 @@ RSpec.describe MQTT::Blink1::Interpreter do
       end
     end
   end
+
+  describe 'an compound message' do
+    let(:message) { <<~EOM
+      [
+        {
+          "play": {
+            "position": 8
+          }
+        },
+        {
+          "sleep": {
+            "time": 0.1
+          }
+        },
+        {
+          "stop": {
+            "position": 4
+          }
+        }
+      ]
+      EOM
+    }
+
+    it 'sends the right commands' do
+      allow(blink1).to receive(:play)
+      allow(blink1).to receive(:stop)
+      parser.interpret(message)
+      expect(blink1).to have_received(:play).with(8)
+      expect(blink1).to have_received(:stop).with(4)
+    end
+  end
 end
+
+__END__
+
+TODO
+
+# Fade duration in millisecond.
+attr_accessor :millis
+
+# Delay to next color in millisecond.
+attr_accessor :delay_millis
