@@ -1,26 +1,24 @@
 ---
-- name: Deploy the mqtt-keyboard service
+- name: Deploy the mqtt-disarm services
   hosts: all
   become: true
   gather_facts: false
 
   vars:
-#    ansible_python_interpreter: auto
-  #   ruby_version:
-  #      major: 2
-  #      minor: 7
-  #      teeny: 0
-  #
-  # roles:
-  #   - role: nerab.ruby
+    ansible_python_interpreter: auto
+    ruby_version:
+      major: 2
+      minor: 7
+      teeny: 0
+
+  roles:
+    - role: nerab.ruby
 
   tasks:
     - name: System packages are present
       apt:
         update_cache: yes
         name:
-          - ruby
-          - ruby-dev
           - libevdev-dev
           - libusb-1.0-0-dev
         state: present
@@ -61,25 +59,27 @@
         mode: "0664"
       tags: systemd, service
 
-    - name: mqtt-keyboard service is enabled and started
-      systemd:
-        name: mqtt-keyboard.service
-        daemon-reload: true
-        state: restarted
-        enabled: true
-      tags: systemd, service
-
     - name: Template for mqtt-disarm service is rendered
       template:
         src: mqtt-disarm.service.j2
         dest: /etc/systemd/system/mqtt-disarm.service
         mode: "0664"
+        tags: systemd, service
+
+    - name: Config changes are picked up by systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: mqtt-keyboard service is enabled and started
+      systemd:
+        name: mqtt-keyboard.service
+        state: restarted
+        enabled: true
       tags: systemd, service
 
     - name: mqtt-disarm service is enabled and started
       systemd:
         name: mqtt-disarm.service
-        daemon-reload: true
         state: restarted
         enabled: true
       tags: systemd, service
