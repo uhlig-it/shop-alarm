@@ -85,11 +85,23 @@ module MQTT
         end
       end
 
+      class Play < Base
+        def call(args)
+          blink1.play(validate_numericality(args['position'], 'play.position'))
+        end
+      end
+
       class Random < Base
         def call(args)
           blink1.random(
             validate_numericality(args['count'], 'random.count')
           )
+        end
+      end
+
+      class Stop < Base
+        def call(args)
+          blink1.stop(validate_numericality(args['position'], 'stop.position'))
         end
       end
     end

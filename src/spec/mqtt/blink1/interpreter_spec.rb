@@ -244,6 +244,38 @@ RSpec.describe MQTT::Blink1::Interpreter do
     end
   end
 
+  describe 'an "play" message' do
+    let(:message) { <<~EOM
+      {
+        "play": {
+          "position": 8
+        }
+      }
+      EOM
+    }
+
+    it 'sends the right command' do
+      allow(blink1).to receive(:play)
+      parser.interpret(message)
+      expect(blink1).to have_received(:play).with(8)
+    end
+
+    context 'that has a bogus position parameter' do
+      let(:message) { <<~EOM
+        {
+          "play": {
+            "position": "eight"
+          }
+        }
+        EOM
+      }
+
+      it 'raises an error' do
+        expect {parser.interpret(message)}.to raise_error(MQTT::Blink1::UnexpectedMessageFormat)
+      end
+    end
+  end
+
   describe 'a "random" message' do
     context 'that is valid' do
       let(:message) { <<~EOM
@@ -291,12 +323,36 @@ RSpec.describe MQTT::Blink1::Interpreter do
       end
     end
   end
+
+  describe 'an "stop" message' do
+    let(:message) { <<~EOM
+      {
+        "stop": {
+          "position": 4
+        }
+      }
+      EOM
+    }
+
+    it 'sends the right command' do
+      allow(blink1).to receive(:stop)
+      parser.interpret(message)
+      expect(blink1).to have_received(:stop).with(4)
+    end
+
+    context 'that has a bogus position parameter' do
+      let(:message) { <<~EOM
+        {
+          "stop": {
+            "position": "eight"
+          }
+        }
+        EOM
+      }
+
+      it 'raises an error' do
+        expect {parser.interpret(message)}.to raise_error(MQTT::Blink1::UnexpectedMessageFormat)
+      end
+    end
+  end
 end
-
-__END__
-
-TODO
-
-play
-
-stop
