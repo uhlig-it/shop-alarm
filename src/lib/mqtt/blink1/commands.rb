@@ -61,6 +61,14 @@ module MQTT
         end
       end
 
+      class Random < Base
+        def call(args)
+          blink1.random(
+            validate_numericality(args['count'], 'random["count"]')
+          )
+        end
+      end
+
       class On < Base
         def call
           blink1.on

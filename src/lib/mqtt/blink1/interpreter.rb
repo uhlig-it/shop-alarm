@@ -30,7 +30,7 @@ module MQTT
       private
 
       def produceCommand(key)
-        raise UnrecognizedCommand, key unless Commands.const_defined?(key.capitalize)
+        raise UnrecognizedCommand, key unless Commands.const_defined?(key.capitalize, false)
         Commands.const_get(key.capitalize).new(@blink1)
       end
     end

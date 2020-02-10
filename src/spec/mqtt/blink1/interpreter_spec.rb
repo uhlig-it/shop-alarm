@@ -20,60 +20,6 @@ RSpec.describe MQTT::Blink1::Interpreter do
     end
   end
 
-  describe 'a "color" message' do
-    context 'that is valid' do
-      let(:message) { <<~EOM
-        {
-          "color": {
-            "red": 255,
-            "green": 0,
-            "blue": 255
-          }
-        }
-        EOM
-      }
-
-      it 'sends the right command' do
-        allow(blink1).to receive(:set_rgb)
-        parser.interpret(message)
-        expect(blink1).to have_received(:set_rgb).with(255, 0, 255)
-      end
-    end
-
-    context 'that has a bogus value for green' do
-      let(:message) { <<~EOM
-        {
-          "color": {
-            "red": 255,
-            "green": "boobar",
-            "blue": 255
-          }
-        }
-        EOM
-      }
-
-      it 'raises an error' do
-        expect {parser.interpret(message)}.to raise_error(MQTT::Blink1::UnexpectedMessageFormat)
-      end
-    end
-
-    context 'that is missing the value for red' do
-      let(:message) { <<~EOM
-        {
-          "color": {
-            "green": 128,
-            "blue": 255
-          }
-        }
-        EOM
-      }
-
-      it 'raises an error' do
-        expect {parser.interpret(message)}.to raise_error(MQTT::Blink1::UnexpectedMessageFormat)
-      end
-    end
-  end
-
   describe 'a "blink" message' do
     context 'that is valid' do
       let(:message) { <<~EOM
@@ -107,6 +53,60 @@ RSpec.describe MQTT::Blink1::Interpreter do
               "green": 255,
               "blue": 255
             }
+          }
+        }
+        EOM
+      }
+
+      it 'raises an error' do
+        expect {parser.interpret(message)}.to raise_error(MQTT::Blink1::UnexpectedMessageFormat)
+      end
+    end
+
+    context 'that is missing the value for red' do
+      let(:message) { <<~EOM
+        {
+          "color": {
+            "green": 128,
+            "blue": 255
+          }
+        }
+        EOM
+      }
+
+      it 'raises an error' do
+        expect {parser.interpret(message)}.to raise_error(MQTT::Blink1::UnexpectedMessageFormat)
+      end
+    end
+  end
+
+  describe 'a "color" message' do
+    context 'that is valid' do
+      let(:message) { <<~EOM
+        {
+          "color": {
+            "red": 255,
+            "green": 0,
+            "blue": 255
+          }
+        }
+        EOM
+      }
+
+      it 'sends the right command' do
+        allow(blink1).to receive(:set_rgb)
+        parser.interpret(message)
+        expect(blink1).to have_received(:set_rgb).with(255, 0, 255)
+      end
+    end
+
+    context 'that has a bogus value for green' do
+      let(:message) { <<~EOM
+        {
+          "color": {
+            "red": 255,
+            "green": "boobar",
+            "blue": 255
           }
         }
         EOM
@@ -176,6 +176,16 @@ RSpec.describe MQTT::Blink1::Interpreter do
     end
   end
 
+  describe 'an "off" message' do
+    let(:message) { '"off"' }
+
+    it 'sends the right command' do
+      allow(blink1).to receive(:off)
+      parser.interpret(message)
+      expect(blink1).to have_received(:off)
+    end
+  end
+
   describe 'an "on" message' do
     let(:message) { '"on"' }
 
@@ -186,24 +196,58 @@ RSpec.describe MQTT::Blink1::Interpreter do
     end
   end
 
-  describe 'an "off" message' do
-    let(:message) { '"off"' }
+  describe 'a "random" message' do
+    context 'that is valid' do
+      let(:message) { <<~EOM
+        {
+          "random": {
+            "count": 25
+          }
+        }
+        EOM
+      }
 
-    it 'sends the right command' do
-      allow(blink1).to receive(:off)
-      parser.interpret(message)
-      expect(blink1).to have_received(:off)
+      it 'sends the right command' do
+        allow(blink1).to receive(:random)
+        parser.interpret(message)
+        expect(blink1).to have_received(:random).with(25)
+      end
+    end
+
+    context 'that has a bogus value for count' do
+      let(:message) { <<~EOM
+        {
+          "random": {
+            "count": "some value"
+          }
+        }
+        EOM
+      }
+
+      it 'raises an error' do
+        expect {parser.interpret(message)}.to raise_error(MQTT::Blink1::UnexpectedMessageFormat)
+      end
+    end
+
+    context 'that is missing the count' do
+      let(:message) { <<~EOM
+        {
+          "random": {
+          }
+        }
+        EOM
+      }
+
+      it 'raises an error' do
+        expect {parser.interpret(message)}.to raise_error(MQTT::Blink1::UnexpectedMessageFormat)
+      end
     end
   end
 end
 
-
 __END__
 
 TODO
-
-random:
-  count: 25 # optional
 
 pattern:
   pos: 0
