@@ -7,6 +7,19 @@ RSpec.describe MQTT::Blink1::Interpreter do
 
   after { blink1.off }
 
+  describe 'an unknown message' do
+    let(:message) { <<~EOM
+      {
+        "foo": "bar"
+      }
+      EOM
+    }
+
+    it 'raises an error' do
+      expect {parser.interpret(message)}.to raise_error(MQTT::Blink1::UnrecognizedCommand)
+    end
+  end
+
   describe 'a "color" message' do
     context 'that is valid' do
       let(:message) { <<~EOM
@@ -34,6 +47,66 @@ RSpec.describe MQTT::Blink1::Interpreter do
             "red": 255,
             "green": "boobar",
             "blue": 255
+          }
+        }
+        EOM
+      }
+
+      it 'raises an error' do
+        expect {parser.interpret(message)}.to raise_error(MQTT::Blink1::UnexpectedMessageFormat)
+      end
+    end
+
+    context 'that is missing the value for red' do
+      let(:message) { <<~EOM
+        {
+          "color": {
+            "green": 128,
+            "blue": 255
+          }
+        }
+        EOM
+      }
+
+      it 'raises an error' do
+        expect {parser.interpret(message)}.to raise_error(MQTT::Blink1::UnexpectedMessageFormat)
+      end
+    end
+  end
+
+  describe 'a "blink" message' do
+    context 'that is valid' do
+      let(:message) { <<~EOM
+        {
+          "blink": {
+            "count": 25,
+            "color": {
+              "red": 128,
+              "green": 64,
+              "blue": 11
+            }
+          }
+        }
+        EOM
+      }
+
+      it 'sends the right command' do
+        allow(blink1).to receive(:blink)
+        parser.interpret(message)
+        expect(blink1).to have_received(:blink).with(128, 64, 11, 25)
+      end
+    end
+
+    context 'that has a bogus value for count' do
+      let(:message) { <<~EOM
+        {
+          "blink": {
+            "count": "hocus",
+            "color": {
+              "red": 255,
+              "green": 255,
+              "blue": 255
+            }
           }
         }
         EOM
@@ -128,13 +201,6 @@ end
 __END__
 
 TODO
-
-blink:
-  count: 25
-  color:
-    red: 255
-    green: 255
-    blue: 255
 
 random:
   count: 25 # optional

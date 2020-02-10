@@ -21,10 +21,17 @@ module MQTT
           end
 
           key = message.keys.first
-          Commands.const_get(key.capitalize).new(@blink1).call(message[key])
+          produceCommand(key).call(message[key])
         else
-          Commands.const_get(message.capitalize).new(@blink1).call
+          produceCommand(message).call
         end
+      end
+
+      private
+
+      def produceCommand(key)
+        raise UnrecognizedCommand, key unless Commands.const_defined?(key.capitalize)
+        Commands.const_get(key.capitalize).new(@blink1)
       end
     end
   end

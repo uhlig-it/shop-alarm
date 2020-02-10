@@ -50,6 +50,17 @@ module MQTT
         end
       end
 
+      class Blink < Base
+        def call(args)
+          blink1.blink(
+            validate_color(args['color']['red'], 'color["red"]'),
+            validate_color(args['color']['green'], 'color["green"]'),
+            validate_color(args['color']['blue'], 'color["blue"]'),
+            validate_numericality(args['count'], 'blink["time"]')
+          )
+        end
+      end
+
       class On < Base
         def call
           blink1.on
