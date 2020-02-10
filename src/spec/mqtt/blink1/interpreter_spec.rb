@@ -196,6 +196,54 @@ RSpec.describe MQTT::Blink1::Interpreter do
     end
   end
 
+  describe 'a "pattern" message' do
+    let(:message) { <<~EOM
+      {
+        "pattern": {
+          "position": 11,
+          "fade": {
+            "time": 500,
+            "color": {
+              "red": 11,
+              "green": 37,
+              "blue": 222
+            }
+          }
+        }
+      }
+      EOM
+    }
+
+    it 'sends the right command' do
+      allow(blink1).to receive(:write_pattern_line)
+      parser.interpret(message)
+      expect(blink1).to have_received(:write_pattern_line).with(500, 11, 37, 222, 11)
+    end
+
+    context 'that has a bogus position parameter' do
+      let(:message) { <<~EOM
+        {
+          "pattern": {
+            "position": "elf",
+            "fade": {
+              "time": 500,
+              "color": {
+                "red": 11,
+                "green": 37,
+                "blue": 222
+              }
+            }
+          }
+        }
+        EOM
+      }
+
+      it 'raises an error' do
+        expect {parser.interpret(message)}.to raise_error(MQTT::Blink1::UnexpectedMessageFormat)
+      end
+    end
+  end
+
   describe 'a "random" message' do
     context 'that is valid' do
       let(:message) { <<~EOM
@@ -248,15 +296,6 @@ end
 __END__
 
 TODO
-
-pattern:
-  pos: 0
-  fade:
-    time: 100 # optional
-    color:
-      red: 255
-      green: 255
-      blue: 255
 
 play
 

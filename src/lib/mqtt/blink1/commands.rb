@@ -29,12 +29,23 @@ module MQTT
         end
       end
 
+      class Blink < Base
+        def call(args)
+          blink1.blink(
+            validate_color(args['color']['red'], 'blink.color.red'),
+            validate_color(args['color']['green'], 'blink.color.green'),
+            validate_color(args['color']['blue'], 'blink.color.blue'),
+            validate_numericality(args['count'], 'blink.time')
+          )
+        end
+      end
+
       class Color < Base
         def call(args)
           blink1.set_rgb(
-            validate_color(args['red'], 'color["red"]'),
-            validate_color(args['green'], 'color["green"]'),
-            validate_color(args['blue'], 'color["blue"]')
+            validate_color(args['red'], 'color.red'),
+            validate_color(args['green'], 'color.green'),
+            validate_color(args['blue'], 'color.blue')
           )
         end
       end
@@ -42,30 +53,17 @@ module MQTT
       class Fade < Base
         def call(args)
           blink1.fade_to_rgb(
-            validate_numericality(args['time'], 'fade["time"]'),
-            validate_color(args['color']['red'], 'color["red"]'),
-            validate_color(args['color']['green'], 'color["green"]'),
-            validate_color(args['color']['blue'], 'color["blue"]')
+            validate_numericality(args['time'], 'fade.time'),
+            validate_color(args['color']['red'], 'fade.color.red'),
+            validate_color(args['color']['green'], 'fade.color.green'),
+            validate_color(args['color']['blue'], 'fade.color.blue')
           )
         end
       end
 
-      class Blink < Base
-        def call(args)
-          blink1.blink(
-            validate_color(args['color']['red'], 'color["red"]'),
-            validate_color(args['color']['green'], 'color["green"]'),
-            validate_color(args['color']['blue'], 'color["blue"]'),
-            validate_numericality(args['count'], 'blink["time"]')
-          )
-        end
-      end
-
-      class Random < Base
-        def call(args)
-          blink1.random(
-            validate_numericality(args['count'], 'random["count"]')
-          )
+      class Off < Base
+        def call
+          blink1.off
         end
       end
 
@@ -75,9 +73,23 @@ module MQTT
         end
       end
 
-      class Off < Base
-        def call
-          blink1.off
+      class Pattern < Base
+        def call(args)
+          blink1.write_pattern_line(
+            validate_numericality(args['fade']['time'], 'pattern.fade.time'),
+            validate_color(args['fade']['color']['red'], 'pattern.fade.color.red'),
+            validate_color(args['fade']['color']['green'], 'pattern.fade.color.green'),
+            validate_color(args['fade']['color']['blue'], 'pattern.fade.color.blue'),
+            validate_numericality(args['position'], 'pattern.position'),
+          )
+        end
+      end
+
+      class Random < Base
+        def call(args)
+          blink1.random(
+            validate_numericality(args['count'], 'random.count')
+          )
         end
       end
     end
