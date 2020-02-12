@@ -19,7 +19,7 @@ module MQTT
         @mqtt.get(@topic) do |topic, message|
           @logger.debug(self.class.name) { "Received in #{topic}: #{message}" }
           @interpreter.interpret(message)
-        rescue Interpreter::Error => e
+        rescue MQTT::Blink1::Error => e
           @logger.error(self.class.name) { e.message }
         end
 

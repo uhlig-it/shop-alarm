@@ -33,10 +33,16 @@
   become: true
   tags: systemd, service
 
-- name: Service is enabled and started
+- name: Service is enabled
+  systemd:
+    name: mqtt-blink1.service
+    enabled: true
+  become: true
+  tags: systemd, service
+
+- name: Service is restarted
   systemd:
     name: mqtt-blink1.service
     state: restarted
-    enabled: true
   become: true
   tags: systemd, service

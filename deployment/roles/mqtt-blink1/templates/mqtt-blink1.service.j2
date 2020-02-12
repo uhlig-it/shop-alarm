@@ -6,7 +6,10 @@ After=network-online.target
 [Service]
 ExecStart={{ app_dir }}/bin/mqtt-blink1   \
             --mqtt {{ mqtt_disarm_mqtt_url }}     \
-            --topic {{ mqtt_disarm_status_topic }}  \
+            --topic {{ mqtt_disarm_blink1_topic }}  \
+            --verbose \
+            --verbose \
+            --verbose \
             --verbose
 Type=simple
 Restart=on-failure

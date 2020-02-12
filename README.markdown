@@ -1,6 +1,6 @@
 # MQTT Keyboard
 
-Listens to an input device via `evdev` and, on Enter, publishes the entered text to an MQTT topic. A listener would than, on message, disable the alarm system.
+Listens to an input device via `evdev` and, on Enter, publishes the entered text to an MQTT topic. A listener then, on message, disables the alarm system. Optionally, a blink1 device provides some visual feedback.
 
 # Synopsis
 
@@ -43,3 +43,4 @@ Ansible will deploy the service, enable and start it.
 * Use MAC address as client ID (there shall be only one keyboard; the last one connecting wins)
 * Tests?
 * Can we [blink the LED](https://hewner.github.io/2006/08/21/evdev-for-ruby-with-morse-code/)?
+* Add an SSD1306 display

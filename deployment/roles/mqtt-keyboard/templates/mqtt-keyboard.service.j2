@@ -9,6 +9,9 @@ ExecStart={{ app_dir }}/bin/mqtt-keyboard    \
             --timeout {{ mqtt_disarm_timeout }} \
             --mqtt {{ mqtt_disarm_mqtt_url }}   \
             --topic {{ mqtt_disarm_keyboard_topic }}     \
+            --verbose \
+            --verbose \
+            --verbose \
             --verbose
 Type=simple
 Restart=on-failure

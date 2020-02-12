@@ -12,6 +12,7 @@
     mqtt_disarm_timeout: 3
     mqtt_disarm_keyboard_topic: werkstatt/keyboard
     mqtt_disarm_status_topic: werkstatt/alarm
+    mqtt_disarm_blink1_topic: werkstatt/blink1
 
   roles:
     - role: mqtt-keyboard

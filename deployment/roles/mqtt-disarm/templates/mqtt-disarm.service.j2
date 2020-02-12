@@ -10,6 +10,9 @@ ExecStart={{ app_dir }}/bin/mqtt-disarm   \
             --keyboard-topic {{ mqtt_disarm_keyboard_topic }}  \
             --code {{ mqtt_disarm_code }}  \
             --status-topic {{ mqtt_disarm_status_topic }}  \
+            --verbose \
+            --verbose \
+            --verbose \
             --verbose
 Type=simple
 Restart=on-failure
