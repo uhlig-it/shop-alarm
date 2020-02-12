@@ -1,0 +1,37 @@
+- name: App directory exists
+  file:
+    path: "{{ app_dir }}"
+    state: directory
+    mode: "0755"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+  become: true
+  tags: app, directory
+
+- name: App files are present
+  synchronize:
+    src: "{{ playbook_dir }}/../src/"
+    dest: "{{ app_dir }}/"
+  become: false
+  tags: app, files
+
+- name: bundler's deployment mode is enabled
+  shell:
+    cmd: bundle config --local set deployment 'true'
+    chdir: "{{ app_dir }}"
+  become: false
+  tags: ruby, bundler, config, deployment
+
+- name: bundler is not installing development gems
+  shell:
+    cmd: bundle config --local set without development
+    chdir: "{{ app_dir }}"
+  become: false
+  tags: ruby, bundler, config, deployment
+
+- name: Ruby dependendies are up-to-date
+  bundler:
+    state: present
+    chdir: "{{ app_dir }}"
+  become: false
+  tags: app, ruby, bundler

@@ -1,85 +1,19 @@
 ---
-- name: Deploy the mqtt-disarm services
+- name: Deploy the mqtt-alarm
   hosts: all
   become: true
   gather_facts: false
 
   vars:
     ansible_python_interpreter: auto
-    ruby_version:
-      major: 2
-      minor: 7
-      teeny: 0
+    app_dir: /opt/shop-alarm
+
+    mqtt_disarm_device: /dev/input/event0
+    mqtt_disarm_timeout: 3
+    mqtt_disarm_keyboard_topic: werkstatt/keyboard
+    mqtt_disarm_status_topic: werkstatt/alarm
 
   roles:
-    - role: nerab.ruby
-
-  tasks:
-    - name: System packages are present
-      apt:
-        update_cache: yes
-        name:
-          - libevdev-dev
-          - libusb-1.0-0-dev
-        state: present
-      tags: apt
-
-    - name: App files are present
-      copy:
-        src: "{{ playbook_dir }}/../src/"
-        dest: /opt/mqtt-disarm/
-        mode: "0755"
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
-      tags: app
-
-    - name: bundler's deployment mode is enabled
-      shell:
-        cmd: bundle config --local set deployment 'true'
-        chdir: /opt/mqtt-disarm
-      become: false
-
-    - name: bundler is not installing development gems
-      shell:
-        cmd: bundle config --local set without development
-        chdir: /opt/mqtt-disarm
-      become: false
-
-    - name: Ruby dependendies are up-to-date
-      bundler:
-        state: present
-        chdir: /opt/mqtt-disarm
-      become: false
-      tags: app, ruby
-
-    - name: Template for mqtt-keyboard service is rendered
-      template:
-        src: mqtt-keyboard.service.j2
-        dest: /etc/systemd/system/mqtt-keyboard.service
-        mode: "0664"
-      tags: systemd, service
-
-    - name: Template for mqtt-disarm service is rendered
-      template:
-        src: mqtt-disarm.service.j2
-        dest: /etc/systemd/system/mqtt-disarm.service
-        mode: "0664"
-        tags: systemd, service
-
-    - name: Config changes are picked up by systemd
-      systemd:
-        daemon_reload: yes
-
-    - name: mqtt-keyboard service is enabled and started
-      systemd:
-        name: mqtt-keyboard.service
-        state: restarted
-        enabled: true
-      tags: systemd, service
-
-    - name: mqtt-disarm service is enabled and started
-      systemd:
-        name: mqtt-disarm.service
-        state: restarted
-        enabled: true
-      tags: systemd, service
+    - role: mqtt-keyboard
+    - role: mqtt-disarm
+    - role: mqtt-blink1

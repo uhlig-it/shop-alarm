@@ -4,7 +4,7 @@ Documentation=https://github.com/suhlig/mqtt-disarm
 After=network-online.target
 
 [Service]
-ExecStart=/opt/mqtt-disarm/bin/mqtt-disarm   \
+ExecStart={{ app_dir }}/bin/mqtt-disarm   \
             --mqtt {{ mqtt_disarm_mqtt_url }}     \
             --motion {{ mqtt_disarm_motion_url }}     \
             --keyboard-topic {{ mqtt_disarm_keyboard_topic }}  \

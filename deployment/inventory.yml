@@ -1,4 +1,3 @@
 all:
   hosts:
-#    oldpi.local:
     shop.uhlig.it:
