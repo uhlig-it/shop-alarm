@@ -54,6 +54,7 @@ rescue MQTT::ProtocolException => err
   logger.error err.backtrace.join("\n")
   retry
 rescue => err
+  warn "Error: #{err}"
   logger.error(err)
   logger.error err.backtrace.join("\n")
   exit 1
