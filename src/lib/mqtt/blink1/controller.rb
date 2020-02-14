@@ -3,9 +3,10 @@ require_relative 'interpreter'
 
 module MQTT
   module Blink1
+    # TODO This could be a route
     class Controller
-      def initialize(mqtt:, topic:, logger:)
-        @mqtt = mqtt
+      def initialize(broker:, topic:, logger:)
+        @broker = broker
         @topic = topic
         @logger = logger
 
@@ -16,7 +17,7 @@ module MQTT
       def start!
         @blink1.open
 
-        @mqtt.get(@topic) do |topic, message|
+        @broker.get(@topic) do |topic, message|
           @logger.debug(self.class.name) { "Received in #{topic}: #{message}" }
           @interpreter.interpret(message)
         rescue MQTT::Blink1::Error => e

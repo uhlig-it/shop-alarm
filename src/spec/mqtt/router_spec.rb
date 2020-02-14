@@ -3,18 +3,18 @@ require 'rspec/eventually'
 require 'logger'
 
 RSpec.describe MQTT::Router do
-  subject(:router) { described_class.new(mqtt: mqtt, logger: logger) }
-  let(:mqtt) { MQTT::Client.new('mqtts://mqtt:q1L5ZRGHMeFmnRlxKvsFY3ACs@mqtt.uhlig.it/werkstatt/blink1') }
+  subject(:router) { described_class.new(broker: broker, logger: logger) }
+  let(:broker) { MQTT::Client.new('mqtts://mqtt:q1L5ZRGHMeFmnRlxKvsFY3ACs@mqtt.uhlig.it/werkstatt/blink1') }
   let(:received_messages) { Hash.new }
-  let(:logger) { instance_double(Logger) }
+  let(:logger) { Logger.new('/dev/null') }
 
-  before { mqtt.connect }
-  after  { mqtt.disconnect }
+  before { broker.connect }
+  after  { broker.disconnect }
 
   context 'no route' do
     it 'does not receive messages' do
       start_router
-      mqtt.publish('test', 'welcome')
+      broker.publish('test', 'welcome')
       expect(received_messages).to be_empty
     end
   end
@@ -28,7 +28,7 @@ RSpec.describe MQTT::Router do
 
     it 'receives the message' do
       start_router
-      mqtt.publish('test', 'welcome')
+      broker.publish('test', 'welcome')
       expect { received_messages['test'] }.to eventually eq 'welcome'
     end
   end

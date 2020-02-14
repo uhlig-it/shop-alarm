@@ -44,9 +44,9 @@ module MQTT
       end
 
       class Publish < Base
-        def initialize(mqtt:, topic:, logger:)
+        def initialize(broker:, topic:, logger:)
           super(logger: logger)
-          @mqtt = mqtt
+          @broker = broker
           @topic = topic
           @logger = logger
         end
@@ -58,7 +58,7 @@ module MQTT
           end
 
           debug "Publishing '#{buffer}' to '#{@topic}'"
-          @mqtt.publish(@topic, buffer)
+          @broker.publish(@topic, buffer)
           debug "Success"
 
           buffer.reset

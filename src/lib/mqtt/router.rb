@@ -8,8 +8,8 @@ module MQTT
       end
     end
 
-    def initialize(mqtt:, logger:)
-      @mqtt = mqtt
+    def initialize(broker:, logger:)
+      @broker = broker
       @logger = logger
       @routes = Hash.new
     end

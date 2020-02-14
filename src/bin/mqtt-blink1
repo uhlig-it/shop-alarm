@@ -46,7 +46,7 @@ begin
   logger.info "Log level is #{%w[DEBUG INFO WARN ERROR FATAL UNKNOWN][logger.level]}"
 
   MQTT::Blink1::Controller.new(
-    mqtt: MQTT::Client.connect(options[:mqtt][:url]),
+    broker: MQTT::Client.connect(options[:mqtt][:url]),
     topic: options[:topic],
     logger: logger
   ).start!

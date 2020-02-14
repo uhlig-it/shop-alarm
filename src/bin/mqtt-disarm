@@ -66,7 +66,7 @@ begin
   logger.debug "Alarm will be disarmed when code #{options[:code]} was received"
 
   MQTT::Alarm.new(
-    mqtt: MQTT::Client.connect(options[:mqtt][:url]),
+    broker: MQTT::Client.connect(options[:mqtt][:url]),
     motion: Motion::WebController.new(options[:motion][:url], options[:motion][:camera_id]),
     keyboard_topic: options[:keyboard_topic],
     status_topic: options[:status_topic],

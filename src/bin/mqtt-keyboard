@@ -71,7 +71,7 @@ begin
   kp.register(
     :KEY_KPENTER,
     MQTT::Keyboard::Commands::Publish.new(
-      mqtt: mqtt,
+      broker: mqtt,
       topic: options[:mqtt][:topic],
       logger: logger
     )
