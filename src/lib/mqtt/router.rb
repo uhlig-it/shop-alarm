@@ -1,4 +1,5 @@
 require 'mqtt'
+require_relative 'blink1/client'
 
 module MQTT
   class Router
@@ -21,9 +22,21 @@ module MQTT
     def start!
       @logger.warn(self.class.name) { 'Nothing to subscribe to' } if topics.empty?
 
-      @mqtt.get(*topics) do |topic, message|
-        raise NoRouteDefined.new(topic) unless @routes.has_key?(topic)
-        @routes.fetch(topic).call(topic, message)
+      @broker.get(*topics) do |topic, message|
+        @logger.debug(self.class.name) { "#{topic}: #{message}" }
+        unless @routes.has_key?(topic)
+          e = NoRouteDefined.new(topic)
+          @logger.error(self.class.name) { e }
+          raise e
+        end
+
+        route = @routes.fetch(topic)
+        @logger.debug(self.class.name) { "Found route #{route} for topic #{topic}. Invoking it now." }
+
+        route.call(topic, message)
+        @logger.debug(self.class.name) { 'Done.' }
+      rescue => e
+        @logger.error(self.class.name) { e }
       end
     end
 
