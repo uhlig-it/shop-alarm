@@ -1,0 +1,27 @@
+- name: Service template is rendered
+  template:
+    src: mqtt-router.service.j2
+    dest: /etc/systemd/system/mqtt-router.service
+    mode: "0664"
+  become: true
+  tags: systemd, service
+
+- name: Config changes are picked up by systemd
+  systemd:
+    daemon_reload: yes
+  become: true
+  tags: systemd, service
+
+- name: Service is enabled
+  systemd:
+    name: mqtt-router.service
+    enabled: true
+  become: true
+  tags: systemd, service
+
+- name: Service is restarted
+  systemd:
+    name: mqtt-router.service
+    state: restarted
+  become: true
+  tags: systemd, service

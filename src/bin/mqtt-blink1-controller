@@ -7,9 +7,8 @@ require 'optparse'
 require 'logger'
 require 'pathname'
 require 'mqtt'
-require 'pry'
 
-require_relative '../lib/mqtt/blink1/client'
+require_relative '../lib/mqtt/blink1/controller'
 
 options = {
   mqtt: {
@@ -46,15 +45,11 @@ end.parse!
 begin
   logger.info "Log level is #{%w[DEBUG INFO WARN ERROR FATAL UNKNOWN][logger.level]}"
 
-  blink1 = MQTT::Blink1::Client.new(
+  MQTT::Blink1::Controller.new(
     broker: MQTT::Client.connect(options[:mqtt][:url]),
     topic: options[:topic],
     logger: logger
-  )
-
-
-  Pry.config.prompt_name = 'blink1'
-  Pry.start
+  ).start!
 rescue MQTT::ProtocolException => err
   logger.error err.backtrace.join("\n")
   retry

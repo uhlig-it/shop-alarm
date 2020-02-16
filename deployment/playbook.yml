@@ -18,3 +18,4 @@
     - role: mqtt-keyboard
     - role: mqtt-disarm
     - role: mqtt-blink1
+    - role: mqtt-router
