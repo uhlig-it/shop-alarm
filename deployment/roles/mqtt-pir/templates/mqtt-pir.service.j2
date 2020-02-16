@@ -1,13 +1,13 @@
 [Unit]
-Description=mqtt-blink1
+Description=mqtt-pir
 Documentation=https://github.com/suhlig/mqtt-disarm
 After=network-online.target
 
 [Service]
-ExecStart={{ app_dir }}/bin/mqtt-blink1-controller \
-            --mqtt {{ mqtt_blink1_mqtt_url }} \
-            --topic {{ mqtt_blink1_mqtt_topic }} \
-            --verbose \
+ExecStart={{ app_dir }}/bin/mqtt-pir \
+            --mqtt {{ mqtt_pir_mqtt_url }} \
+            --topic {{ mqtt_pir_mqtt_topic }} \
+            --gpio {{ mqtt_pir_gpio }} \
             --verbose \
             --verbose \
             --verbose
@@ -18,4 +18,4 @@ Restart=on-failure
 
 [Install]
 WantedBy=default.target
-Alias=mqtt-blink1.service
+Alias=mqtt-pir.service

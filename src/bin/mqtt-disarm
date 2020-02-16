@@ -56,6 +56,10 @@ OptionParser.new do |opts|
     options[:status_topic] = topic
   end
 
+  opts.on('--pir-topic=TOPIC', 'The MQTT topic where the PIR sensor status is published to') do |topic|
+    options[:pir_topic] = topic
+  end
+
   opts.on('--code=CODE', 'The secret code to disarm the alarm system') do |code|
     options[:code] = code
   end
@@ -70,6 +74,7 @@ begin
     motion: Motion::WebController.new(options[:motion][:url], options[:motion][:camera_id]),
     keyboard_topic: options[:keyboard_topic],
     status_topic: options[:status_topic],
+    pir_topic: options[:pir_topic],
     logger: logger
   ).start!(options[:code])
 rescue MQTT::ProtocolException => err

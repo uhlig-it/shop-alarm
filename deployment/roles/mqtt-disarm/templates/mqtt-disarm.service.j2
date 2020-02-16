@@ -4,12 +4,13 @@ Documentation=https://github.com/suhlig/mqtt-disarm
 After=network-online.target
 
 [Service]
-ExecStart={{ app_dir }}/bin/mqtt-disarm   \
-            --mqtt {{ mqtt_disarm_mqtt_url }}     \
-            --motion {{ mqtt_disarm_motion_url }}     \
-            --keyboard-topic {{ mqtt_disarm_keyboard_topic }}  \
-            --code {{ mqtt_disarm_code }}  \
-            --status-topic {{ mqtt_disarm_status_topic }}  \
+ExecStart={{ app_dir }}/bin/mqtt-disarm \
+            --code {{ mqtt_disarm_code }} \
+            --mqtt {{ mqtt_disarm_mqtt_url }} \
+            --keyboard-topic {{ mqtt_disarm_keyboard_topic }} \
+            --status-topic {{ mqtt_disarm_status_topic }} \
+            --pir-topic {{ mqtt_disarm_pir_topic }} \
+            --motion {{ mqtt_disarm_motion_url }} \
             --verbose \
             --verbose \
             --verbose \

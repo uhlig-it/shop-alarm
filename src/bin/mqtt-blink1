@@ -52,7 +52,6 @@ begin
     logger: logger
   )
 
-
   Pry.config.prompt_name = 'blink1'
   Pry.start
 rescue MQTT::ProtocolException => err

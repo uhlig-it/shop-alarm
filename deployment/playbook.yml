@@ -5,17 +5,31 @@
   gather_facts: false
 
   vars:
-    ansible_python_interpreter: auto
+    ansible_python_interpreter: /usr/bin/python3
     app_dir: /opt/shop-alarm
 
-    mqtt_disarm_device: /dev/input/event0
-    mqtt_disarm_timeout: 3
-    mqtt_disarm_keyboard_topic: werkstatt/keyboard
+    mqtt_blink1_mqtt_url: "{{ mqtt_disarm_mqtt_url }}"
+    mqtt_blink1_mqtt_topic: werkstatt/blink1
+
     mqtt_disarm_status_topic: werkstatt/alarm
-    mqtt_disarm_blink1_topic: werkstatt/blink1
+    mqtt_disarm_keyboard_topic: werkstatt/keyboard
+    mqtt_disarm_pir_topic: werkstatt/pir
+
+    mqtt_keyboard_mqtt_url: "{{ mqtt_disarm_mqtt_url }}"
+    mqtt_keyboard_mqtt_topic: werkstatt/keyboard
+    mqtt_keyboard_device: /dev/input/event0
+    mqtt_keyboard_timeout: 3
+
+    mqtt_pir_mqtt_url: "{{ mqtt_disarm_mqtt_url }}"
+    mqtt_pir_mqtt_topic: werkstatt/pir
+    mqtt_pir_gpio: GPIO23
+
+    mqtt_router_mqtt_url: "{{ mqtt_disarm_mqtt_url }}"
+    mqtt_router_blink1_topic: werkstatt/blink1
 
   roles:
-    - role: mqtt-keyboard
-    - role: mqtt-disarm
     - role: mqtt-blink1
+    - role: mqtt-disarm
+    - role: mqtt-keyboard
+    - role: mqtt-pir
     - role: mqtt-router

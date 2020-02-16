@@ -1,10 +1,14 @@
-# MQTT Keyboard
+# Shop Alarm
+
+A workshop security system based on events published to MQTT.
+
+# Components
+
+## Keyboard
 
 Listens to an input device via `evdev` and, on Enter, publishes the entered text to an MQTT topic. A listener then, on message, disables the alarm system. Optionally, a blink1 device provides some visual feedback.
 
-# Synopsis
-
-Example:
+### Synopsis
 
 ```command
 $ mqtt-keyboard --device DEVICE --timeout TIMEOUT --mqtt MQTT_URL --topic TOPIC
@@ -40,6 +44,8 @@ Ansible will deploy the service, enable and start it.
 
 # TODO
 
+* Keyboard looses connection; perhaps it helps to connect after Enter and not at startup
+* Implement more of the code in terms of the router
 * Use MAC address as client ID (there shall be only one keyboard; the last one connecting wins)
 * Tests?
 * Can we [blink the LED](https://hewner.github.io/2006/08/21/evdev-for-ruby-with-morse-code/)?

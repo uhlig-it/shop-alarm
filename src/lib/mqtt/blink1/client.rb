@@ -17,21 +17,28 @@ module MQTT
         @logger = logger
       end
 
-      def blink(count:, color:)
-        raise 'not yet implemented'
+      def blink(count:, red:, green:, blue:)
+        publish(blink: {
+          count: count,
+          color: {
+            red: red,
+            green: green,
+            blue: blue
+          }
+        })
       end
 
-      def color(color:)
-        publish(color: { red: color.red, green: color.green, blue: color.blue })
+      def color(red:, green:, blue:)
+        publish(color: { red: red, green: green, blue: blue })
       end
 
-      def fade(time:, color:)
+      def fade(time:, red:, green:, blue:)
         publish(fade: {
           time: time,
           color: {
-            red: color.red,
-            green: color.blue,
-            blue: color.green
+            red: red,
+            green: green,
+            blue: blue
           }
         })
       end
@@ -44,29 +51,29 @@ module MQTT
         publish('on')
       end
 
-      def pattern(position:, time:, color:)
+      def pattern(position:, time:, red:, green:, blue:)
         publish(pattern: {
           position: position,
           fade: {
             time: time,
             color: {
-              red: color.red,
-              green: color.blue,
-              blue: color.green
+              red: red,
+              green: green,
+              blue: blue
             }
           }
         })
       end
 
-      def play(position:)
+      def play(position)
         publish(play: { position: position })
       end
 
-      def random(count:)
+      def random(count=1)
         publish(random: { count: count })
       end
 
-      def stop(position:)
+      def stop(position)
         publish(stop: { position: position })
       end
 

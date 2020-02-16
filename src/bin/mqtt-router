@@ -13,6 +13,9 @@ require_relative '../lib/mqtt/router'
 options = {
   mqtt: {
     url: nil,
+  },
+  blink1: {
+    topic: nil,
   }
 }
 
@@ -35,6 +38,10 @@ OptionParser.new do |opts|
   opts.on('--mqtt=MQTT_URI', 'The URI to the MQTT server') do |mqtt|
     options[:mqtt][:url] = mqtt
   end
+
+  opts.on('--blink1-topic=TOPIC', 'The MQTT topic where the blink1 message is published to') do |topic|
+    options[:topic] = topic
+  end
 end.parse!
 
 begin
@@ -42,9 +49,9 @@ begin
 
   broker = MQTT::Client.connect(options[:mqtt][:url])
   router = MQTT::Router.new(broker: broker, logger: logger)
-  blink1 = MQTT::Blink1::Client.new(broker: broker, topic: 'werkstatt/blink1', logger: logger)
+  blink1 = MQTT::Blink1::Client.new(broker: broker, topic: options[:blink1][:topic], logger: logger)
 
-  router.add_route 'werkstatt/alarm' do |topic, message|
+  router.add_route(options[:blink1][:topic]) do |topic, message|
     case message
     when 'disarmed'
       blink1.color(red: 0, green: 128, blue: 0)

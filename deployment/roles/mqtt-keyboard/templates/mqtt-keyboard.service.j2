@@ -4,11 +4,11 @@ Documentation=https://github.com/suhlig/mqtt-disarm
 After=network-online.target
 
 [Service]
-ExecStart={{ app_dir }}/bin/mqtt-keyboard    \
-            --device {{ mqtt_disarm_device }}   \
-            --timeout {{ mqtt_disarm_timeout }} \
-            --mqtt {{ mqtt_disarm_mqtt_url }}   \
-            --topic {{ mqtt_disarm_keyboard_topic }}     \
+ExecStart={{ app_dir }}/bin/mqtt-keyboard \
+            --device {{ mqtt_keyboard_device }} \
+            --timeout {{ mqtt_keyboard_timeout }} \
+            --mqtt {{ mqtt_keyboard_mqtt_url }} \
+            --topic {{ mqtt_keyboard_mqtt_topic }} \
             --verbose \
             --verbose \
             --verbose \

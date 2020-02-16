@@ -4,8 +4,9 @@ Documentation=https://github.com/suhlig/mqtt-disarm
 After=network-online.target
 
 [Service]
-ExecStart={{ app_dir }}/bin/mqtt-router   \
-            --mqtt {{ mqtt_disarm_mqtt_url }}     \
+ExecStart={{ app_dir }}/bin/mqtt-router \
+            --mqtt {{ mqtt_router_mqtt_url }} \
+            --blink1-topic {{ mqtt_router_blink1_topic }} \
             --verbose \
             --verbose \
             --verbose \
