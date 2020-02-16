@@ -26,6 +26,7 @@
 
     mqtt_router_mqtt_url: "{{ mqtt_disarm_mqtt_url }}"
     mqtt_router_blink1_topic: werkstatt/blink1
+    mqtt_router_status_topic: werkstatt/alarm
 
   roles:
     - role: mqtt-blink1

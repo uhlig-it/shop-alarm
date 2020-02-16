@@ -7,6 +7,7 @@ After=network-online.target
 ExecStart={{ app_dir }}/bin/mqtt-router \
             --mqtt {{ mqtt_router_mqtt_url }} \
             --blink1-topic {{ mqtt_router_blink1_topic }} \
+            --status-topic {{ mqtt_router_status_topic }} \
             --verbose \
             --verbose \
             --verbose \

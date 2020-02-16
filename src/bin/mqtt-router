@@ -14,9 +14,8 @@ options = {
   mqtt: {
     url: nil,
   },
-  blink1: {
-    topic: nil,
-  }
+  status_topic: nil,
+  blink1_topic: nil,
 }
 
 logger = Logger.new(STDERR)
@@ -40,7 +39,11 @@ OptionParser.new do |opts|
   end
 
   opts.on('--blink1-topic=TOPIC', 'The MQTT topic where the blink1 message is published to') do |topic|
-    options[:topic] = topic
+    options[:blink1_topic] = topic
+  end
+
+  opts.on('--status-topic=TOPIC', 'The MQTT topic where the new status of the alarm is published to') do |topic|
+    options[:status_topic] = topic
   end
 end.parse!
 
@@ -49,16 +52,16 @@ begin
 
   broker = MQTT::Client.connect(options[:mqtt][:url])
   router = MQTT::Router.new(broker: broker, logger: logger)
-  blink1 = MQTT::Blink1::Client.new(broker: broker, topic: options[:blink1][:topic], logger: logger)
+  blink1 = MQTT::Blink1::Client.new(broker: broker, topic: options[:blink1_topic], logger: logger)
 
-  router.add_route(options[:blink1][:topic]) do |topic, message|
+  router.add_route(options[:status_topic]) do |topic, message|
     case message
     when 'disarmed'
       blink1.color(red: 0, green: 128, blue: 0)
     when 'armed'
       blink1.color(red: 128, green: 0, blue: 0)
     when 'tampered'
-      blink1.color(red: 128, green: 128, blue: 0)
+      blink1.blink(count: 3, red: 255, green: 255, blue: 0)
     end
   end
 
