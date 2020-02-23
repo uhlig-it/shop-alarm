@@ -1,13 +1,13 @@
 [Unit]
-Description=mqtt-router
+Description=mqtt-lock
 Documentation=https://github.com/suhlig/mqtt-disarm
 After=network-online.target
 
 [Service]
-ExecStart={{ app_dir }}/bin/mqtt-router \
-            --mqtt {{ mqtt_router_mqtt_url }} \
-            --blink1-topic {{ mqtt_router_blink1_topic }} \
-            --status-topic {{ mqtt_router_status_topic }} \
+ExecStart={{ app_dir }}/bin/mqtt-lock \
+            --code {{ lock_code }} \
+            --mqtt {{ shopalarm_mqtt_url }} \
+            --topic {{ lock_mqtt_topic }} \
             --verbose \
             --verbose \
             --verbose \
@@ -19,4 +19,4 @@ Restart=on-failure
 
 [Install]
 WantedBy=default.target
-Alias=mqtt-router.service
+Alias=mqtt-lock.service

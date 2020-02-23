@@ -4,34 +4,52 @@ A workshop security system based on events published to MQTT.
 
 # Components
 
-## Keyboard
+## `MQTT::Blink1` actor
 
-Listens to an input device via `evdev` and, on Enter, publishes the entered text to an MQTT topic. A listener then, on message, disables the alarm system. Optionally, a blink1 device provides some visual feedback.
+When `locked`, `unlocked`, `lock-failed` or `unlock-failed` events appear on `werkstatt/lock`, it sets the color of the _local_ `Blink1` device accordingly.
 
-### Synopsis
+TODO In addition, it publishes a `color-changed`, `fade` etc. events to `werkstatt/blink1`. Other components may be interested.
 
-```command
-$ mqtt-keyboard --device DEVICE --timeout TIMEOUT --mqtt MQTT_URL --topic TOPIC
-```
+## `MQTT::Keyboard` sensor
 
-The program will start to listen for events on `DEVICE`. When `ENTER` is pressed, any input that was typed within `TIMEOUT` will be published to the `TOPIC` at [`MQTT_URL`](https://github.com/mqtt/mqtt.github.io/wiki/URI-Scheme).
+Publishes a `text-entered` event to `werkstatt/keyboard` where the payload is the entered text.
 
-Example:
+## `MQTT::Lock` processor
 
-```command
-$ mqtt-keyboard --device /dev/input/event0 --timeout 3 --mqtt-host mqtts://user:password@example.com --topic oldpi/keyboard
-```
+Upon a `text-entered` event in `werkstatt/keyboard`, decides whether the payload (entered text) is satisfactory to lock or unlock it. On success it publishes a `locked` or `unlocked` event to `werkstatt/lock`;
 
-Anything typed on `/dev/input/event0` will be published to `oldpi/keyboard`. If there are more than 3 seconds between two consecutive keystrokes, all previous input will be ignored.
+If the lock/unlock failed, it publishes an `lock-failed` or `unlock-failed` event.
 
-Listening to these events is as simple as:
+## `MQTT::Motion` sensor
 
-```command
-$ mosquitto_sub \
-  --cafile /usr/local/etc/openssl/cert.pem \
-  --url mqtts://user:password@example.com/oldpi/keyboard \
-  -F '\e[92m %I %t: \e[96m%p\e[0m'
-```
+Publishes `motion-started` and `motion-ended` events to `werkstatt/motion` as it detects it.
+
+Upon `locked` and `unlocked` events at `werkstatt/lock`, it pauses or resumes motion detection accordingly. Same happens when the expected tag ID and user agent appear in a `scanned` event on `werkstatt/nfc`
+
+## `MQTT::NFC` sensor
+
+Publishes a `scanned` event to `werkstatt/nfc` as it is called via SSH. It passes the NFC tag's ID as well as the calling user agent (e.g. `iPhoneSteffen`).
+
+## `MQTT::PIR` sensor
+
+Publishes `motion-started` and `motion-ended` events to `werkstatt/pir` as it detects them.
+
+## `MQTT::Telegram` actor
+
+Subscribes to `werkstatt/telegram`. Upon `message` events, sends the payload of the event to Telegram.
+
+# FAQ
+
+Q: What if we want to combine two events, or have a dependency? E.g. if the PIR event fires, but the lock is unlocked, the alarm event should not be published?
+A: We need to find a way to query the status of a sensor. Perhaps we need a (compound. virtual) processor (the "Alarm System") that, upon one or more events, evaluates the state of multiple sensors in order to take some action (e.g. send a Telegram message or emit an `alarm` event).
+
+Q: What if another component wants to change the color of the Blink1 device?
+A: It would have to:
+
+   1. publish a domain event about the thing that just happened, and
+   1. make a change to the code of the `MQTT::Blink1` so that it understands the new event.
+
+   The point is that one component cannot just change the state of another one. Both must agree on the existence of the new event, and it is up to `MQTT::Blink1` to make something happen when the new event appears.
 
 # Deployment
 
@@ -42,11 +60,31 @@ $ ansible-playbook playbook.yml
 
 Ansible will deploy the service, enable and start it.
 
+# Troubleshooting
+
+```command
+$ mosquitto_sub \
+  --cafile /usr/local/etc/openssl/cert.pem \
+  --url mqtts://user:password@example.com/oldpi/keyboard \
+  -F '\e[92m %I %t: \e[96m%p\e[0m'
+```
+
+On Debian boxes (like the Raspberry Pi), the invocation is slightly different: `--cafile ...` must be replaced by `--capath /etc/ssl/certs`.
+
 # TODO
 
+* iBeacon works, but really is not necessary anymore as we now have NFC support in iOS.
+
+  Approach:
+  - On the outside of the shop, place a tag that, when scanned by my (unlocked) iPhone, calls the `disarm` script over SSH. Have a backup tag on the inside, too.
+  - On the inside of the shop, place a tag that, when scanned by my (unlocked) iPhone, calls the `arm` script over SSH.
+  - Keyboard disarm is still possible.
+
 * Keyboard looses connection; perhaps it helps to connect after Enter and not at startup
+* How do we show the current status after a tamper event? Where do we get it from?
+  => Event sourcing?
 * Implement more of the code in terms of the router
 * Use MAC address as client ID (there shall be only one keyboard; the last one connecting wins)
 * Tests?
-* Can we [blink the LED](https://hewner.github.io/2006/08/21/evdev-for-ruby-with-morse-code/)?
+* Can we [blink the keyboard LED](https://hewner.github.io/2006/08/21/evdev-for-ruby-with-morse-code/)?
 * Add an SSD1306 display

@@ -5,10 +5,9 @@ After=network-online.target
 
 [Service]
 ExecStart={{ app_dir }}/bin/mqtt-pir \
-            --mqtt {{ mqtt_pir_mqtt_url }} \
-            --topic {{ mqtt_pir_mqtt_topic }} \
-            --gpio {{ mqtt_pir_gpio }} \
-            --verbose \
+            --mqtt {{ shopalarm_mqtt_url }} \
+            --topic {{ pir_mqtt_topic }} \
+            --gpio {{ pir_gpio }} \
             --verbose \
             --verbose
 Type=simple

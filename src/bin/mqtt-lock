@@ -8,13 +8,14 @@ require 'logger'
 require 'pathname'
 require 'mqtt'
 
-require_relative '../lib/mqtt/blink1/controller'
+require_relative '../lib/mqtt/lock'
 
 options = {
+  code: nil,
   mqtt: {
     url: nil,
+    topic: nil,
   },
-  topic: nil,
 }
 
 logger = Logger.new(STDERR)
@@ -23,7 +24,7 @@ logger.progname = Pathname(__FILE__).basename
 
 OptionParser.new do |opts|
   opts.banner = <<~EOM
-    Subscribes an MQTT topic and translates messages into Blink1 patterns
+    Interprets domain events as they appear on MQTT and transforms some of them into Blink1 patterns.
 
     Options:
   EOM
@@ -37,17 +38,22 @@ OptionParser.new do |opts|
     options[:mqtt][:url] = mqtt
   end
 
-  opts.on('--topic=TOPIC', 'The MQTT topic where the blink1 message is expected') do |topic|
-    options[:topic] = topic
+  opts.on('--topic=TOPIC', 'The MQTT topic where the events are expected') do |topic|
+    options[:mqtt][:topic] = topic
+  end
+
+  opts.on('--code=CODE', 'The secret code to lock or unlock') do |code|
+    options[:code] = code
   end
 end.parse!
 
 begin
   logger.info "Log level is #{%w[DEBUG INFO WARN ERROR FATAL UNKNOWN][logger.level]}"
 
-  MQTT::Blink1::Controller.new(
+  MQTT::Lock.new(
     broker: MQTT::Client.connect(options[:mqtt][:url]),
-    topic: options[:topic],
+    topic: options[:mqtt][:topic],
+    code: options[:code],
     logger: logger
   ).start!
 rescue MQTT::ProtocolException => err

@@ -1,0 +1,15 @@
+- name: Mosquitto client package is present
+  apt:
+    name: mosquitto-clients
+    state: present
+  become: true
+
+- name: Command is rendered
+  template:
+    src: mqtt-nfc.j2
+    dest: /opt/shop-alarm/bin/mqtt-nfc
+    mode: "0755"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+  become: true
+  tags: nfc,command,mqtt

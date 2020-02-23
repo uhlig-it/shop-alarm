@@ -1,5 +1,10 @@
 require 'evdev' if RUBY_PLATFORM =~ /linux/
 
+require_relative 'commands/append'
+require_relative 'commands/print'
+require_relative 'commands/dummy-send'
+require_relative 'commands/chop'
+
 module MQTT
   module Keyboard
     class Keypad

@@ -5,10 +5,10 @@ After=network-online.target
 
 [Service]
 ExecStart={{ app_dir }}/bin/mqtt-keyboard \
-            --device {{ mqtt_keyboard_device }} \
-            --timeout {{ mqtt_keyboard_timeout }} \
-            --mqtt {{ mqtt_keyboard_mqtt_url }} \
-            --topic {{ mqtt_keyboard_mqtt_topic }} \
+            --device {{ keyboard_device }} \
+            --timeout {{ keyboard_timeout }} \
+            --mqtt {{ shopalarm_mqtt_url }} \
+            --topic {{ keyboard_mqtt_topic }} \
             --verbose \
             --verbose \
             --verbose \

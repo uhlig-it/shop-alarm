@@ -9,7 +9,7 @@ require 'pathname'
 require 'mqtt'
 
 require_relative '../lib/mqtt/keyboard/buffer'
-require_relative '../lib/mqtt/keyboard/commands'
+require_relative '../lib/mqtt/keyboard/commands/publish'
 require_relative '../lib/mqtt/keyboard/keypad'
 
 options = {

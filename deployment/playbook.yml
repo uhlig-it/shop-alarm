@@ -1,5 +1,5 @@
 ---
-- name: Deploy the mqtt-alarm
+- name: Deploy the shop alarm system
   hosts: all
   become: true
   gather_facts: false
@@ -8,29 +8,33 @@
     ansible_python_interpreter: /usr/bin/python3
     app_dir: /opt/shop-alarm
 
-    mqtt_blink1_mqtt_url: "{{ mqtt_disarm_mqtt_url }}"
-    mqtt_blink1_mqtt_topic: werkstatt/blink1
+    blink1_mqtt_topic: werkstatt/blink1
+    lock_mqtt_topic: werkstatt/lock
 
-    mqtt_disarm_status_topic: werkstatt/alarm
-    mqtt_disarm_keyboard_topic: werkstatt/keyboard
-    mqtt_disarm_pir_topic: werkstatt/pir
+    keyboard_mqtt_topic: werkstatt/keyboard
+    keyboard_device: /dev/input/event0
+    keyboard_timeout: 3
 
-    mqtt_keyboard_mqtt_url: "{{ mqtt_disarm_mqtt_url }}"
-    mqtt_keyboard_mqtt_topic: werkstatt/keyboard
-    mqtt_keyboard_device: /dev/input/event0
-    mqtt_keyboard_timeout: 3
+    nfc_mqtt_topic: werkstatt/nfc
 
-    mqtt_pir_mqtt_url: "{{ mqtt_disarm_mqtt_url }}"
-    mqtt_pir_mqtt_topic: werkstatt/pir
-    mqtt_pir_gpio: GPIO23
+    pir_mqtt_topic: werkstatt/pir
+    pir_gpio: GPIO23
 
-    mqtt_router_mqtt_url: "{{ mqtt_disarm_mqtt_url }}"
-    mqtt_router_blink1_topic: werkstatt/blink1
-    mqtt_router_status_topic: werkstatt/alarm
+    # mqtt_motion_lock_topic: werkstatt/lock
+    # mqtt_motion_status_topic: werkstatt/motion
+    #
+    # mqtt_nfc_mqtt_topic: werkstatt/nfc
+    #
+    #
+    # mqtt_telegram_mqtt_topic: werkstatt/telegram
 
   roles:
     - role: mqtt-blink1
-    - role: mqtt-disarm
     - role: mqtt-keyboard
+    - role: mqtt-lock
+    - role: mqtt-nfc
     - role: mqtt-pir
-    - role: mqtt-router
+# TODO
+#    - role: mqtt-motion
+#    - role: mqtt-telegram
+#    - role: iBeacon
