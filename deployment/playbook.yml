@@ -23,9 +23,6 @@
     # mqtt_motion_lock_topic: werkstatt/lock
     # mqtt_motion_status_topic: werkstatt/motion
     #
-    # mqtt_nfc_mqtt_topic: werkstatt/nfc
-    #
-    #
     # mqtt_telegram_mqtt_topic: werkstatt/telegram
 
   roles:
@@ -34,7 +31,8 @@
     - role: mqtt-lock
     - role: mqtt-nfc
     - role: mqtt-pir
+    - role: iBeacon
+
 # TODO
 #    - role: mqtt-motion
 #    - role: mqtt-telegram
-#    - role: iBeacon
