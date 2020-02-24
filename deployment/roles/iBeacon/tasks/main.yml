@@ -14,6 +14,7 @@
 
 - name: Bluetooth device is advertising
   command: hciconfig hci0 leadv 3
+  ignore_errors: true
   become: true
   tags: bluetooth, bluez, hciconfig
 
@@ -28,6 +29,6 @@
 - name: iBeacon UUIDs are set
   # format is 0x08 0x0008 $IBEACONPROFIX $UUID $MAJOR $MINOR $POWER
   command: "hcitool -i hci0 cmd 0x08 0x0008 1E 02 01 1A 1A FF 4C 00 02 15 {{ item }} 00 00 00 00 C8"
-  with_items: "{{ mqtt_beacons }}"
+  with_items: "{{ iBeacon_guids }}"
   become: true
   tags: bluetooth, bluez, hcitool
