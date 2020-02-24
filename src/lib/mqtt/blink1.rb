@@ -9,12 +9,16 @@ module MQTT
         case message
         when 'locked'
           device.set_rgb(128, 0, 0)
+          broker.publish(topic, '{"color":{"r":128,"g":0,"b":0}}')
         when 'unlocked'
           device.set_rgb(0, 128, 0)
+          broker.publish(topic, '{"color":{"r":0,"g":128,"b":0}}')
         when 'lock-failed'
           device.blink(0, 128, 0, 3)
+          broker.publish(topic, '{"blink":{"count":"3","color":{"r":0,"g":128,"b":0}}}')
         when 'unlock-failed'
           device.blink(128, 0, 0, 3)
+          broker.publish(topic, '{"blink":{"count":"3","color":{"r":128,"g":0,"b":0}}}')
         end
       end
     end

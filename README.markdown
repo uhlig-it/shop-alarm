@@ -8,7 +8,7 @@ A workshop security system based on events published to MQTT.
 
 When `locked`, `unlocked`, `lock-failed` or `unlock-failed` events appear on `werkstatt/lock`, it sets the color of the _local_ `Blink1` device accordingly.
 
-TODO In addition, it publishes a `color-changed`, `fade` etc. events to `werkstatt/blink1`. Other components may be interested.
+In addition, it publishes a `color`, `fade` etc. event to `werkstatt/blink1`. Other components may be interested.
 
 ## `MQTT::Keyboard` sensor
 
