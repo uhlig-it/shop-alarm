@@ -10,8 +10,6 @@ ExecStart={{ app_dir }}/bin/mqtt-keyboard \
             --mqtt {{ shopalarm_mqtt_url }} \
             --topic {{ keyboard_mqtt_topic }} \
             --verbose \
-            --verbose \
-            --verbose \
             --verbose
 Type=simple
 Restart=on-failure

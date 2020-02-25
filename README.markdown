@@ -73,17 +73,6 @@ On Debian boxes (like the Raspberry Pi), the invocation is slightly different: `
 
 # TODO
 
-* iBeacon works, but really is not necessary anymore as we now have NFC support in iOS.
-
-  Approach:
-  - On the outside of the shop, place a tag that, when scanned by my (unlocked) iPhone, calls the `disarm` script over SSH. Have a backup tag on the inside, too.
-  - On the inside of the shop, place a tag that, when scanned by my (unlocked) iPhone, calls the `arm` script over SSH.
-  - Keyboard disarm is still possible.
-
-* Keyboard looses connection; perhaps it helps to connect after Enter and not at startup
-* How do we show the current status after a tamper event? Where do we get it from?
-  => Event sourcing?
-* Implement more of the code in terms of the router
 * Use MAC address as client ID (there shall be only one keyboard; the last one connecting wins)
 * Tests?
 * Can we [blink the keyboard LED](https://hewner.github.io/2006/08/21/evdev-for-ruby-with-morse-code/)?

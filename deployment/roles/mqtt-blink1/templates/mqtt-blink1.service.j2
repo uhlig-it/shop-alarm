@@ -8,8 +8,6 @@ ExecStart={{ app_dir }}/bin/mqtt-blink1 \
             --mqtt {{ shopalarm_mqtt_url }} \
             --topic {{ blink1_mqtt_topic }} \
             --verbose \
-            --verbose \
-            --verbose \
             --verbose
 Type=simple
 Restart=on-failure
