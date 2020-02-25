@@ -4,9 +4,9 @@ module MQTT
   module Keyboard
     module Commands
       class Publish < Base
-        def initialize(broker:, topic:, logger:)
+        def initialize(url:, topic:, logger:)
           super(logger: logger)
-          @broker = broker
+          @url = url
           @topic = topic
           @logger = logger
         end
@@ -17,9 +17,13 @@ module MQTT
             return
           end
 
-          debug "Publishing '#{buffer}' to '#{@topic}'"
-          @broker.publish(@topic, buffer)
-          debug "Success"
+          MQTT::Client.connect(@url) do |broker|
+            debug "Publishing '#{buffer}' to '#{@topic}'"
+            broker.publish(@topic, buffer)
+            debug "Success"
+          rescue => e
+            error(e)
+          end
 
           buffer.reset
         end

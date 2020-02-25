@@ -65,13 +65,10 @@ begin
     logger: logger
   )
 
-  mqtt = MQTT::Client.new(options[:mqtt][:url])
-  mqtt.connect
-
   kp.register(
     :KEY_KPENTER,
     MQTT::Keyboard::Commands::Publish.new(
-      broker: mqtt,
+      url: options[:mqtt][:url],
       topic: options[:mqtt][:topic],
       logger: logger
     )

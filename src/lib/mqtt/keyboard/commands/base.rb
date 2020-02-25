@@ -21,6 +21,10 @@ module MQTT
         def warn(message)
           @logger.warn(self) { message }
         end
+
+        def error(message)
+          @logger.error(self) { message }
+        end
       end
     end
   end
