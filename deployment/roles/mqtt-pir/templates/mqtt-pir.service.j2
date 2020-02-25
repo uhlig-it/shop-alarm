@@ -12,8 +12,6 @@ ExecStart={{ app_dir }}/bin/mqtt-pir \
             --verbose
 Type=simple
 Restart=on-failure
-# TODO User=mqtt-disarm
-# TODO Group=mqtt-disarm
 
 [Install]
 WantedBy=default.target
