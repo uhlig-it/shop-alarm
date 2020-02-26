@@ -1,0 +1,39 @@
+---
+- name: Server package is present
+  apt:
+    name: mosquitto
+    state: present
+  become: true
+
+- name: Service exists
+  service:
+    name: mosquitto
+    enabled: true
+  become: true
+
+- name: Client package is present
+  apt:
+    name: mosquitto-clients
+    state: present
+  become: true
+
+- name: Password file exists
+  file:
+    path: /etc/mosquitto/passwd
+    state: touch
+  become: true
+
+- name: Password file is up to date
+  command: "mosquitto_passwd -b /etc/mosquitto/passwd {{ item.name | quote }} {{ item.password | quote }}"
+  become: true
+  notify:
+    - restart mosquitto
+  loop: "{{ mosquitto_users }}"
+
+- name: Config is up to date
+  template:
+    src: templates/mosquitto.conf
+    dest: /etc/mosquitto/mosquitto.conf
+  become: true
+  notify:
+    - restart mosquitto

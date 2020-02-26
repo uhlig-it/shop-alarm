@@ -44,3 +44,4 @@
     - role: mqtt-nfc
     - role: mqtt-pir
 #    - role: mqtt-telegram
+    - role: mosquitto
