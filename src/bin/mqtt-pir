@@ -56,9 +56,12 @@ mqtt = urlparse(args.mqtt)
 broker.on_connect = on_connect
 broker.on_disconnect = on_disconnect
 broker.on_publish = on_publish
-broker.tls_set_context()
 broker.enable_logger(logging)
 broker.username_pw_set(mqtt.username, mqtt.password)
+
+if mqtt.scheme == "mqtts":
+    broker.tls_set_context()
+
 broker.connect(mqtt.hostname, mqtt.port or 8883, 10)
 
 pir.when_motion = on_motion_begin
