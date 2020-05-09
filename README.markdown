@@ -6,7 +6,7 @@ A workshop security system based on events published to MQTT.
 
 ## `MQTT::Blink1` actor
 
-When `locked`, `unlocked`, `lock-failed` or `unlock-failed` events appear on `werkstatt/lock`, it sets the color of the _local_ `Blink1` device accordingly.
+When `armed`, `disarmed`, `arm-failed` or `disarm-failed` events appear on `werkstatt/lock`, it sets the color of the _local_ `Blink1` device accordingly.
 
 In addition, it publishes a `color`, `fade` etc. event to `werkstatt/blink1`. Other components may be interested.
 
@@ -16,15 +16,15 @@ Publishes a `text-entered` event to `werkstatt/keyboard` where the payload is th
 
 ## `MQTT::Lock` processor
 
-Upon a `text-entered` event in `werkstatt/keyboard`, decides whether the payload (entered text) is satisfactory to lock or unlock it. On success it publishes a `locked` or `unlocked` event to `werkstatt/lock`;
+Upon a `text-entered` event in `werkstatt/keyboard`, decides whether the payload (entered text) is satisfactory to arm or disarm it. On success it publishes a `armed` or `disarmed` event to `werkstatt/lock`;
 
-If the lock/unlock failed, it publishes an `lock-failed` or `unlock-failed` event.
+If the arm/disarm failed, it publishes an `arm-failed` or `disarm-failed` event.
 
 ## `MQTT::Motion` sensor
 
 Publishes `motion-started` and `motion-ended` events to `werkstatt/motion` as it detects it.
 
-Upon `locked` and `unlocked` events at `werkstatt/lock`, it pauses or resumes motion detection accordingly. Same happens when the expected tag ID and user agent appear in a `scanned` event on `werkstatt/nfc`
+Upon `armed` and `disarmed` events at `werkstatt/lock`, it pauses or resumes motion detection accordingly. Same happens when the expected tag ID and user agent appear in a `scanned` event on `werkstatt/nfc`
 
 ## `MQTT::NFC` sensor
 
@@ -40,7 +40,7 @@ Subscribes to `werkstatt/telegram`. Upon `message` events, sends the payload of 
 
 # FAQ
 
-Q: What if we want to combine two events, or have a dependency? E.g. if the PIR event fires, but the lock is unlocked, the alarm event should not be published?
+Q: What if we want to combine two events, or have a dependency? E.g. if the PIR event fires, but the lock is disarmed, the alarm event should not be published?
 A: We need to find a way to query the status of a sensor. Perhaps we need a (compound. virtual) processor (the "Alarm System") that, upon one or more events, evaluates the state of multiple sensors in order to take some action (e.g. send a Telegram message or emit an `alarm` event).
 
 Q: What if another component wants to change the color of the Blink1 device?
@@ -73,7 +73,7 @@ On Debian boxes (like the Raspberry Pi), the invocation is slightly different: `
 
 # TODO
 
-* Delay locking a couple of seconds after it being enabled, so we don't raise an alert on our way out
+* Delay arming a couple of seconds after it being enabled, so we don't raise an alert on our way out
 * Use MAC address as client ID (there shall be only one keyboard; the last one connecting wins)
 * Tests?
 * Can we [blink the keyboard LED](https://hewner.github.io/2006/08/21/evdev-for-ruby-with-morse-code/)?

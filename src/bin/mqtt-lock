@@ -42,7 +42,7 @@ OptionParser.new do |opts|
     options[:mqtt][:topic] = topic
   end
 
-  opts.on('--code=CODE', 'The secret code to lock or unlock') do |code|
+  opts.on('--code=CODE', 'The secret code to arm or disarm the lock') do |code|
     options[:code] = code
   end
 end.parse!

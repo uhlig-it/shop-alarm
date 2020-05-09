@@ -29,38 +29,38 @@ module MQTT
 
     private
 
+    def publish(message)
+      @logger.debug(self.class.name) { "Publishing to #{@topic}: #{message}" }
+      @broker.publish(@topic, message)
+    end
+
     #
     # TODO This could be a proper state machine that publishes on state transitions.
     #
     def on_keyboard(chars)
       case chars[0]
-      when '+' # attempt to unlock
-        publish('unlocking')
+      when '+' # attempt to disarm
+        publish('disarming')
 
         if chars[1..] != @code
-          # do not change status, but publish the failed attempt to unlock
-          publish('unlock-failed')
+          # do not change status, but publish the failed attempt to disarm
+          publish('disarm-failed')
         else
-          @state = 'unlocked'
+          @state = 'disarmed'
         end
-      when '-' # attempt to lock
-        publish('locking')
+      when '-' # attempt to arm
+        publish('arming')
 
         if chars[1..] != @code
-          # do not change status, but publish the failed attempt to lock
-          publish('lock-failed')
+          # do not change status, but publish the failed attempt to arm
+          publish('arm-failed')
         else
-          @state = 'locked'
+          @state = 'armed'
         end
       else # tamper
         @logger.warn(self.class.name) { "Ignoring keyboard input '#{chars}'" }
       end
       publish(@state)
-    end
-
-    def publish(message)
-      @logger.debug(self.class.name) { "Publishing to #{@topic}: #{message}" }
-      @broker.publish(@topic, message)
     end
 
     def on_nfc(message)
@@ -75,11 +75,11 @@ module MQTT
 
       case event['tag']
       when 'Werkstatt-Tür Außen'
-        @logger.info(self.class.name) { "Unlocked via NFC by '#{event['user-agent']}'" }
-        @state = 'unlocked'
+        @logger.info(self.class.name) { "Disarmed via NFC by '#{event['user-agent']}'" }
+        @state = 'disarmed'
       when 'Werkstatt-Tür Innen'
-        @logger.info(self.class.name) { "Locked via NFC by '#{event['user-agent']}'" }
-        @state = 'locked'
+        @logger.info(self.class.name) { "Armed via NFC by '#{event['user-agent']}'" }
+        @state = 'armed'
       else
         @logger.warn(self.class.name) { "Ignoring scan of tag '#{event['tag']}'" }
       end
