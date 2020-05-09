@@ -3,10 +3,11 @@ require 'json'
 
 module MQTT
   class Lock
-    def initialize(broker:, topic:, code:, logger:)
+    def initialize(broker:, topic:, code:, logger:, motion:)
       @broker = broker
       @topic = topic
       @code = code
+      @motion = motion
       @logger = logger
       @state = nil
 
@@ -20,6 +21,11 @@ module MQTT
       @router.add_route('werkstatt/nfc') do |topic, message|
         @logger.debug(self.class.name) { "Received in #{topic}: #{message}" }
         on_nfc(message)
+      end
+
+      @router.add_route('werkstatt/pir') do |topic, message|
+        @logger.debug(self.class.name) { "Received in #{topic}: #{message}" }
+        on_pir(message)
       end
     end
 
@@ -85,6 +91,23 @@ module MQTT
       end
 
       publish(@state)
+    end
+
+    # When the PIR sensor reports begin of motion and the lock is armed, Motion is un-paused and can begin recording.
+    # When the PIR sensor reports end of motion, Motion is paused regardless of the state.
+    def on_pir(message)
+      case message
+      when 'begin'
+        if @state == 'armed'
+          @motion.unpause
+        else
+          @logger.info(self.class.name) { "Not unpausing Motion because state is not 'armed' (it actually is #{@state})" }
+        end
+      when 'end'
+          @motion.pause
+      else
+        @logger.warn(self.class.name) { "Ignoring PIR message '#{message}'" }
+      end
     end
   end
 end

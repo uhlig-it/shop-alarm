@@ -6,9 +6,9 @@ module Motion
   # Controls detection of a Motion instance via [web control](https://motion-project.github.io/motion_config.html#webcontrol_interface)
   #
   class WebController
-    def initialize(url, camera_id)
+    def initialize(url: 'http://localhost:8080', camera: 0)
       @url = url
-      @camera_id = camera_id
+      @camera_id = camera
     end
 
     def start
