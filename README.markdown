@@ -73,6 +73,7 @@ On Debian boxes (like the Raspberry Pi), the invocation is slightly different: `
 
 # TODO
 
+* Delay locking a couple of seconds after it being enabled, so we don't raise an alert on our way out
 * Use MAC address as client ID (there shall be only one keyboard; the last one connecting wins)
 * Tests?
 * Can we [blink the keyboard LED](https://hewner.github.io/2006/08/21/evdev-for-ruby-with-morse-code/)?
