@@ -10,7 +10,7 @@ tag_name="${1:?Missing tag name. Needs to be the first argument.}"
 user_agent="${2:?Missing user agent. Needs to be the second argument.}"
 
 mosquitto_pub \
-  --capath /etc/ssl/certs \
+  {% if 'mqtts' in shopalarm_mqtt_url %}--capath /etc/ssl/certs{% endif %} \
   --url "{{ shopalarm_mqtt_url }}/{{ nfc_mqtt_topic }}" \
   --message "$(envsubst <<EOM
   {
