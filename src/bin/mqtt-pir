@@ -45,7 +45,7 @@ def on_motion_end():
 def on_connect(client, userdata, flags, rc):
     logging.info("MQTT connected with result code "+str(rc))
 
-def on_disconnect(client, userdata, flags, rc):
+def on_disconnect(client, userdata, rc):
     logging.info("MQTT disconnected with result code "+str(rc))
 
 def on_publish(client, userdata, mid):
