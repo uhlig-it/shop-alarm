@@ -73,8 +73,12 @@ On Debian boxes (like the Raspberry Pi), the invocation is slightly different: `
 
 # TODO
 
+* On first start, `motion` needs to be restarted; otherwise the camera will be almost black
+* Write some (if not all) of the events appearing at MQTT into InfluxDB
+  => some are useful as numeric data (e.g. how long an alert went on)
+  => some are useful as events that can be show in graphs (e.g. motion detected, alarm disarmed, etc.) => https://gist.github.com/suhlig/049b068185f216824d33756dae99172a
 * Delay arming a couple of seconds after it being enabled, so we don't raise an alert on our way out
 * Use MAC address as client ID (there shall be only one keyboard; the last one connecting wins)
 * Tests?
 * Can we [blink the keyboard LED](https://hewner.github.io/2006/08/21/evdev-for-ruby-with-morse-code/)?
-* Add an SSD1306 display
+* Add an SSD1306 display, just for kicks
