@@ -44,4 +44,5 @@
     - role: mqtt-nfc
     - role: mqtt-pir
 #    - role: mqtt-telegram
-    - role: mosquitto
+    - role: ansible-role-mosquitto-bridge
+      tags: [ mqtt, mosquitto ]
