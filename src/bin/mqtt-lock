@@ -25,7 +25,7 @@ logger.progname = Pathname(__FILE__).basename
 
 OptionParser.new do |opts|
   opts.banner = <<~EOM
-    Interprets domain events as they appear on MQTT and transforms some of them into Blink1 patterns.
+    Interprets domain events as they appear on MQTT and arms / disarms the shop alarm.
 
     Options:
   EOM

@@ -44,6 +44,8 @@ module MQTT
     # TODO This could be a proper state machine that publishes on state transitions.
     #
     def on_keyboard(chars)
+      @logger.info(self.class.name) { "Received keyboard chars '#{chars}'" }
+
       case chars[0]
       when '+' # attempt to disarm
         publish('disarming')
@@ -66,10 +68,13 @@ module MQTT
       else # tamper
         @logger.warn(self.class.name) { "Ignoring keyboard input '#{chars}'" }
       end
+
       publish(@state)
     end
 
     def on_nfc(message)
+      @logger.info(self.class.name) { "Received NFC message '#{message}'" }
+
       msg = JSON.parse(message)
 
       if msg.key?('scanned')
@@ -96,17 +101,21 @@ module MQTT
     # When the PIR sensor reports begin of motion and the lock is armed, Motion is un-paused and can begin recording.
     # When the PIR sensor reports end of motion, Motion is paused regardless of the state.
     def on_pir(message)
+      @logger.info(self.class.name) { "Received PIR message '#{message}'" }
+
       case message
       when 'begin'
         if @state == 'armed'
           @motion.unpause
+          @logger.info(self.class.name) { "Unpaused Motion because lock state is '#{@state}'" }
         else
           @logger.info(self.class.name) { "Not unpausing Motion because state is not 'armed' (it actually is #{@state})" }
         end
       when 'end'
           @motion.pause
+          @logger.info(self.class.name) { "Paused Motion (lock state is '#{@state}')" }
       else
-        @logger.warn(self.class.name) { "Ignoring PIR message '#{message}'" }
+        @logger.warn(self.class.name) { "Ignored" }
       end
     end
   end
