@@ -2,6 +2,10 @@ require_relative 'router'
 require 'json'
 
 module MQTT
+  # broker: MQTT broker to publish state updates
+  # topic: which topic to publish state updates to
+  # code: the secret to arm and disarm the lock
+  # motion: camera interface
   class Lock
     def initialize(broker:, topic:, code:, logger:, motion:)
       @broker = broker
@@ -13,18 +17,18 @@ module MQTT
 
       @router = MQTT::Router.new(broker: @broker, logger: @logger)
 
-      @router.add_route('werkstatt/keyboard') do |topic, message|
-        @logger.debug(self.class.name) { "Received in #{topic}: #{message}" }
+      @router.add_route('werkstatt/keyboard') do |t, message|
+        @logger.debug(self.class.name) { "Received in #{t}: #{message}" }
         on_keyboard(message)
       end
 
-      @router.add_route('werkstatt/nfc') do |topic, message|
-        @logger.debug(self.class.name) { "Received in #{topic}: #{message}" }
+      @router.add_route('werkstatt/nfc') do |t, message|
+        @logger.debug(self.class.name) { "Received in #{t}: #{message}" }
         on_nfc(message)
       end
 
-      @router.add_route('werkstatt/pir') do |topic, message|
-        @logger.debug(self.class.name) { "Received in #{topic}: #{message}" }
+      @router.add_route('werkstatt/pir') do |t, message|
+        @logger.debug(self.class.name) { "Received in #{t}: #{message}" }
         on_pir(message)
       end
     end
