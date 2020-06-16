@@ -1,15 +1,44 @@
+require 'mqtt'
 require_relative '../../lib/mqtt/router'
 require 'rspec/eventually'
 require 'logger'
 
+class BrokerController
+  def start!
+    @pid = fork do
+      exec 'mosquitto'
+    end
+
+    Process.detach(@pid)
+  end
+
+  def stop!
+    Process.kill("TERM", @pid)
+  end
+end
+
 RSpec.describe MQTT::Router do
   subject(:router) { described_class.new(broker: broker, logger: logger) }
-  let(:broker) { MQTT::Client.new('mqtts://mqtt:q1L5ZRGHMeFmnRlxKvsFY3ACs@mqtt.uhlig.it/werkstatt/blink1') }
+  let(:broker) { MQTT::Client.new('mqtt://localhost:1883/rspec') }
   let(:received_messages) { Hash.new }
   let(:logger) { Logger.new('/dev/null') }
 
-  before { broker.connect }
-  after  { broker.disconnect }
+  before do
+    @broker_controller = BrokerController.new
+    @broker_controller.start!
+
+    begin
+      broker.connect
+    rescue Errno::ECONNREFUSED
+      warn "Broker not ready yet"
+      retry
+    end
+  end
+
+  after {
+    broker.disconnect
+    @broker_controller.stop!
+  }
 
   context 'no route' do
     it 'does not receive messages' do
@@ -47,9 +76,7 @@ RSpec.describe MQTT::Router do
     end
   end
 
-  xcontext 'multi-level wildcard' do
-
-  end
+  xcontext 'multi-level wildcard'
 
   private
 
