@@ -1,7 +1,7 @@
 require_relative '../../lib/motion/web_controller'
 
 RSpec.describe Motion::WebController do
-  subject(:shop) { described_class.new(url, camera_id) }
+  subject(:shop) { described_class.new(url: url, camera: camera_id) }
   let(:url) { 'http://shop.uhlig.it:8080' }
   let(:camera_id) { 0 }
 
