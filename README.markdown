@@ -73,7 +73,13 @@ On Debian boxes (like the Raspberry Pi), the invocation is slightly different: `
 
 # TODO
 
+* The Blink1 approach is wrong. We should be talking to it only via MQTT, and send it the rgb/on/off messages etc. Then, one more function simply becomes a matter of translating from one MQTT message to another one:
+
+  `werkstatt/lock: armed` => `werkstatt/blink1: {"color":{"r":255,"g":0,"b":0}}`
+
+* Distinguish between commands and status updates (Tasmota uses `cmnd/foo` and `status/foo`)
 * On first start, `motion` needs to be restarted; otherwise the camera will be almost black
+* Some topics are still hardcoded (`werkstatt/lock`)
 * Write some (if not all) of the events appearing at MQTT into InfluxDB
   => some are useful as numeric data (e.g. how long an alert went on)
   => some are useful as events that can be show in graphs (e.g. motion detected, alarm disarmed, etc.) => https://gist.github.com/suhlig/049b068185f216824d33756dae99172a

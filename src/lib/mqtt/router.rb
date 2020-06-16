@@ -33,7 +33,7 @@ module MQTT
         route = @routes.fetch(topic)
         @logger.debug(self.class.name) { "Found route #{route} for topic #{topic}. Invoking it now." }
 
-        route.call(topic, message)
+        route.call(@broker, topic, message)
         @logger.debug(self.class.name) { 'Done.' }
       rescue => e
         @logger.error(self.class.name) { e }

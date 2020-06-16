@@ -50,7 +50,7 @@ RSpec.describe MQTT::Router do
 
   context 'simple topic' do
     before do
-      router.add_route('test') do |topic, message|
+      router.add_route('test') do |broker, topic, message|
         received_messages[topic] = message
       end
     end
@@ -64,7 +64,7 @@ RSpec.describe MQTT::Router do
 
   xcontext 'single-level wildcard' do
     before do
-      router.add_route('foo/+/bar') do |topic, message|
+      router.add_route('foo/+/bar') do |broker, topic, message|
         received_messages[topic] = message
       end
     end

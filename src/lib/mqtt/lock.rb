@@ -17,17 +17,17 @@ module MQTT
 
       @router = MQTT::Router.new(broker: @broker, logger: @logger)
 
-      @router.add_route('werkstatt/keyboard') do |t, message|
+      @router.add_route('werkstatt/keyboard') do |_, t, message|
         @logger.debug(self.class.name) { "Received in #{t}: #{message}" }
         on_keyboard(message)
       end
 
-      @router.add_route('werkstatt/nfc') do |t, message|
+      @router.add_route('werkstatt/nfc') do |_, t, message|
         @logger.debug(self.class.name) { "Received in #{t}: #{message}" }
         on_nfc(message)
       end
 
-      @router.add_route('werkstatt/pir') do |t, message|
+      @router.add_route('werkstatt/pir') do |_, t, message|
         @logger.debug(self.class.name) { "Received in #{t}: #{message}" }
         on_pir(message)
       end
