@@ -37,12 +37,18 @@
         ansistrano_deploy_via: rsync
         ansistrano_before_setup_tasks_file: "{{ playbook_dir }}/roles/shop-alarm/tasks/owner.yml"
         ansistrano_after_symlink_tasks_file: "{{ playbook_dir }}/roles/shop-alarm/tasks/main.yml"
+      tags: [ mqtt, deploy, alarm ]
     - role: mqtt-blink1
+      tags: [ mqtt, blink1 ]
     - role: mqtt-keyboard
+      tags: [ mqtt, keyboard ]
     - role: mqtt-lock
-#    - role: mqtt-motion
-    - role: mqtt-nfc
-    - role: mqtt-pir
+      tags: [ mqtt, lock, alarm ]
+    # - role: mqtt-motion
 #    - role: mqtt-telegram
-    - role: ansible-role-mosquitto-bridge
+    - role: mqtt-nfc
+      tags: [ mqtt, nfc ]
+    - role: mqtt-pir
+      tags: [ mqtt, pir ]
+    - role: uhlig-it.ansible-role-mosquitto-bridge
       tags: [ mqtt, mosquitto ]
