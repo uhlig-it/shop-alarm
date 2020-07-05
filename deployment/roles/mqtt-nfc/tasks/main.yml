@@ -7,7 +7,7 @@
 - name: Command is rendered
   template:
     src: mqtt-nfc.j2
-    dest: "{{ app_dir }}/bin/mqtt-nfc"
+    dest: /usr/local/bin/mqtt-nfc
     mode: "0755"
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
