@@ -27,16 +27,16 @@
   become: true
   tags: systemd, service
 
-- name: Service is enabled
+- name: Service is disabled
   systemd:
     name: mqtt-pir.service
-    enabled: true
+    enabled: false
   become: true
   tags: systemd, service
 
-- name: Service is restarted
+- name: Service is stopped
   systemd:
     name: mqtt-pir.service
-    state: restarted
+    state: stopped
   become: true
   tags: systemd, service
