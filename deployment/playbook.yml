@@ -28,6 +28,7 @@
       vars:
         iBeacon_guids:
           - 05 91 05 D6 C9 5A 96 A7 69 5C-12 4C 5E 4A 39 AF
+      tags: [ iBeacon ]
     - role: ansistrano.deploy
       become: false
       vars:
