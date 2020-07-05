@@ -6,6 +6,9 @@ module MQTT
   # topic: which topic to publish state updates to
   # code: the secret to arm and disarm the lock
   # motion: camera interface
+  #
+  # TODO There is at least one state machine hidden that would publish on state transitions
+  #
   class Lock
     def initialize(broker:, topic:, code:, logger:, motion:)
       @broker = broker
@@ -39,41 +42,48 @@ module MQTT
 
     private
 
-    def publish(message)
-      @logger.debug(self.class.name) { "Publishing to #{@topic}: #{message}" }
-      @broker.publish(@topic, message)
+    def change_state(new_state)
+      @logger.debug(self.class.name) { "Changing state from #{@state} to #{new_state}" }
+      @state = new_state
+
+      @logger.debug(self.class.name) { "Publishing new state to #{@topic}: #{@state}" }
+      @broker.publish(@topic, @state)
+
+      case @state
+        when 'armed'
+          @logger.debug(self.class.name) { "Starting Motion from previous #{@motion.status}" }
+          @motion.start
+        when 'disarmed'
+          @logger.debug(self.class.name) { "Stopping Motion from previous #{@motion.status}" }
+          @motion.stop
+        else
+          @logger.debug(self.class.name) { "Keeping Motion at #{@motion.status}" }
+      end
     end
 
-    #
-    # TODO This could be a proper state machine that publishes on state transitions.
-    #
     def on_keyboard(chars)
       @logger.info(self.class.name) { "Received keyboard chars '#{chars}'" }
 
       case chars[0]
       when '+' # attempt to disarm
-        publish('disarming')
+        change_state('disarming')
 
         if chars[1..] != @code
-          # do not change status, but publish the failed attempt to disarm
-          publish('disarm-failed')
+          change_state('disarm-failed')
         else
-          @state = 'disarmed'
+          change_state('disarmed')
         end
       when '-' # attempt to arm
-        publish('arming')
+        change_state('arming')
 
         if chars[1..] != @code
-          # do not change status, but publish the failed attempt to arm
-          publish('arm-failed')
+          change_state('arm-failed')
         else
-          @state = 'armed'
+          change_state('armed')
         end
       else # tamper
         @logger.warn(self.class.name) { "Ignoring keyboard input '#{chars}'" }
       end
-
-      publish(@state)
     end
 
     def on_nfc(message)
@@ -91,33 +101,31 @@ module MQTT
       case event['tag']
       when 'Werkstatt-Tür Außen'
         @logger.info(self.class.name) { "Disarmed via NFC by '#{event['user-agent']}'" }
-        @state = 'disarmed'
+        change_state('disarmed')
       when 'Werkstatt-Tür Innen'
         @logger.info(self.class.name) { "Armed via NFC by '#{event['user-agent']}'" }
-        @state = 'armed'
+        change_state('armed')
       else
         @logger.warn(self.class.name) { "Ignoring scan of tag '#{event['tag']}'" }
       end
-
-      publish(@state)
     end
 
-    # When the PIR sensor reports begin of motion and the lock is armed, Motion is un-paused and can begin recording.
-    # When the PIR sensor reports end of motion, Motion is paused regardless of the state.
+    # When the PIR sensor reports begin of motion and the lock is armed, Motion is started and can begin recording if it detects motion.
+    # When the PIR sensor reports end of motion, Motion is stopped regardless of the state.
     def on_pir(message)
       @logger.info(self.class.name) { "Received PIR message '#{message}'" }
 
       case message
       when 'begin'
         if @state == 'armed'
-          @motion.unpause
-          @logger.info(self.class.name) { "Unpaused Motion because lock state is '#{@state}'" }
+          @logger.info(self.class.name) { "Starting Motion because lock state is '#{@state}'" }
+          @motion.start
         else
-          @logger.info(self.class.name) { "Not unpausing Motion because state is not 'armed' (it actually is #{@state})" }
+          @logger.info(self.class.name) { "Not starting Motion because state is not 'armed' (it actually is #{@state})" }
         end
       when 'end'
-          @motion.pause
-          @logger.info(self.class.name) { "Paused Motion (lock state is '#{@state}')" }
+        @logger.info(self.class.name) { "Stopping Motion (lock state is '#{@state}')" }
+        @motion.stop
       else
         @logger.warn(self.class.name) { "Ignored" }
       end

@@ -45,15 +45,15 @@ RSpec.describe Motion::WebController do
         subject.toggle
       end
 
-      it 'is paused' do
+      it 'is stopped' do
         expect(subject.active?).to be_falsey
       end
     end
   end
 
-  context 'when the service is paused' do
+  context 'when the service is stopped' do
     before do
-      subject.pause
+      subject.stop
     end
 
     it 'reports status PAUSE' do
@@ -64,9 +64,9 @@ RSpec.describe Motion::WebController do
       expect(subject.active?).to be_falsey
     end
 
-    context 'and it is paused again' do
+    context 'and it is stopped again' do
       before do
-        subject.pause
+        subject.stop
       end
 
       it 'is still inactive' do

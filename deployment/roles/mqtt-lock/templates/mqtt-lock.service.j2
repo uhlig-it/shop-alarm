@@ -9,6 +9,8 @@ ExecStart={{ app_dir }}/bin/mqtt-lock \
             --mqtt {{ shopalarm_mqtt_url }} \
             --topic {{ lock_mqtt_topic }} \
             --verbose \
+            --verbose \
+            --verbose \
             --verbose
 Type=simple
 Restart=on-failure

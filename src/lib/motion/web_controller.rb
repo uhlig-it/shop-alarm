@@ -16,7 +16,7 @@ module Motion
       nil
     end
 
-    def pause
+    def stop
       get "/#{@camera_id}/detection/pause"
       nil
     end
@@ -31,7 +31,7 @@ module Motion
 
     def toggle
       if active?
-        pause
+        stop
       else
         start
       end
