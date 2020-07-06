@@ -73,6 +73,7 @@ On Debian boxes (like the Raspberry Pi), the invocation is slightly different: `
 
 # TODO
 
+* More state should be persisted in InfluxDB, e.g. the lock state and when motion detected some, well, motion
 * The Blink1 approach is wrong. We should be talking to it only via MQTT, and send it the rgb/on/off messages etc:
 
   ```ruby
@@ -92,6 +93,7 @@ On Debian boxes (like the Raspberry Pi), the invocation is slightly different: `
 * Write some (if not all) of the events appearing at MQTT into InfluxDB
   => some are useful as numeric data (e.g. how long an alert went on)
   => some are useful as events that can be show in graphs (e.g. motion detected, alarm disarmed, etc.) => https://gist.github.com/suhlig/049b068185f216824d33756dae99172a
+
 * Delay arming a couple of seconds after it being enabled, so we don't raise an alert on our way out
 * Use MAC address as client ID (there shall be only one keyboard; the last one connecting wins)
 * Tests?
