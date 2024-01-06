@@ -30,21 +30,6 @@ module MQTT
           b.publish(topic, '{"blink":{"count":"3","color":{"r":255,"g":0,"b":0}}}')
         end
       end
-
-      @router.add_route('werkstatt/pir') do |b, t, message|
-        logger.debug(self.class.name) { "Received in #{t}: #{message}" }
-
-        case message
-        when 'begin'
-          logger.debug(self.class.name) { "Setting LED to yellow" }
-          device.set_rgb(255, 255, 0)
-          b.publish(topic, '{"color":{"r":255,"g":255,"b":0}}')
-        when 'end'
-          logger.debug(self.class.name) { "Setting LED to grey" }
-          device.set_rgb(128, 128, 128)
-          b.publish(topic, '{"color":{"r":128,"g":128,"b":0}}')
-        end
-      end
     end
 
     def start!

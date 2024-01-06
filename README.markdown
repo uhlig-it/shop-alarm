@@ -10,19 +10,9 @@ When `armed`, `disarmed`, `arm-failed` or `disarm-failed` events appear on `werk
 
 In addition, it publishes a `color`, `fade` etc. event to `werkstatt/blink1`. Other components may be interested.
 
-## `MQTT::Motion` sensor
-
-Publishes `motion-started` and `motion-ended` events to `werkstatt/motion` as it detects it.
-
-Upon `armed` and `disarmed` events at `werkstatt/lock`, it pauses or resumes motion detection accordingly. Same happens when the expected tag ID and user agent appear in a `scanned` event on `werkstatt/nfc`
-
 ## `MQTT::NFC` sensor
 
 Publishes a `scanned` event to `werkstatt/nfc` as it is called via SSH. It passes the NFC tag's ID as well as the calling user agent (e.g. `iPhoneSteffen`).
-
-## `MQTT::PIR` sensor
-
-Publishes `motion-started` and `motion-ended` events to `werkstatt/pir` as it detects them.
 
 ## `MQTT::Telegram` actor
 
@@ -30,7 +20,7 @@ Subscribes to `werkstatt/telegram`. Upon `message` events, sends the payload of 
 
 # FAQ
 
-Q: What if we want to combine two events, or have a dependency? E.g. if the PIR event fires, but the lock is disarmed, the alarm event should not be published?
+Q: What if we want to combine two events, or have a dependency? E.g. if the NFC event fires, but the lock is disarmed, the alarm event should not be published?
 A: We need to find a way to query the status of a sensor. Perhaps we need a (compound. virtual) processor (the "Alarm System") that, upon one or more events, evaluates the state of multiple sensors in order to take some action (e.g. send a Telegram message or emit an `alarm` event).
 
 Q: What if another component wants to change the color of the Blink1 device?
@@ -49,17 +39,6 @@ $ ansible-playbook playbook.yml
 ```
 
 Ansible will deploy the service, enable and start it.
-
-# Troubleshooting
-
-```command
-$ mosquitto_sub \
-  --cafile /usr/local/etc/openssl/cert.pem \
-  --url mqtts://user:password@example.com/oldpi/keyboard \
-  -F '\e[92m %I %t: \e[96m%p\e[0m'
-```
-
-On Debian boxes (like the Raspberry Pi), the invocation is slightly different: `--cafile ...` must be replaced by `--capath /etc/ssl/certs`.
 
 # TODO
 

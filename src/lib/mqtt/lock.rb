@@ -24,11 +24,6 @@ module MQTT
         @logger.debug(self.class.name) { "Received in #{t}: #{message}" }
         on_nfc(message)
       end
-
-      @router.add_route('werkstatt/pir') do |_, t, message|
-        @logger.debug(self.class.name) { "Received in #{t}: #{message}" }
-        on_pir(message)
-      end
     end
 
     def start!
@@ -77,27 +72,6 @@ module MQTT
         change_state('armed')
       else
         @logger.warn(self.class.name) { "Ignoring scan of tag '#{event['tag']}'" }
-      end
-    end
-
-    # When the PIR sensor reports begin of motion and the lock is armed, Motion is started and can begin recording if it detects motion.
-    # When the PIR sensor reports end of motion, Motion is stopped regardless of the state.
-    def on_pir(message)
-      @logger.info(self.class.name) { "Received PIR message '#{message}'" }
-
-      case message
-      when 'begin'
-        if @state == 'armed'
-          @logger.info(self.class.name) { "Starting Motion because lock state is '#{@state}'" }
-          @motion.start
-        else
-          @logger.info(self.class.name) { "Not starting Motion because state is not 'armed' (it actually is #{@state})" }
-        end
-      when 'end'
-        @logger.info(self.class.name) { "Stopping Motion (lock state is '#{@state}')" }
-        @motion.stop
-      else
-        @logger.warn(self.class.name) { "Ignored" }
       end
     end
   end

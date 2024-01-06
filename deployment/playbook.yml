@@ -8,28 +8,9 @@
     blink1_mqtt_topic: werkstatt/blink1
     lock_mqtt_topic: werkstatt/lock
     nfc_mqtt_topic: werkstatt/nfc
-    pir_mqtt_topic: werkstatt/pir
-    pir_gpio: GPIO23
     # motion_mqtt_topic: werkstatt/motion
     # mqtt_telegram_mqtt_topic: werkstatt/telegram
-  tasks:
-    - name: mqtt-keyboard is absent
-      systemd:
-        name: mqtt-keyboard.service
-        status: stopped
-        enabled: false
-        daemon_reload: true
-      become: true
-    - name: Service template is absent
-      file:
-        dest: /etc/systemd/system/mqtt-keyboard.service
-      become: true
   roles:
-    - role: iBeacon
-      vars:
-        iBeacon_guids:
-          - 05 91 05 D6 C9 5A 96 A7 69 5C-12 4C 5E 4A 39 AF
-      tags: [ iBeacon ]
     - role: ansistrano.deploy
       become: false
       vars:
@@ -48,7 +29,5 @@
 #    - role: mqtt-telegram
     - role: mqtt-nfc
       tags: [ mqtt, nfc ]
-    - role: mqtt-pir
-      tags: [ mqtt, pir ]
     - role: uhlig-it.ansible-role-mosquitto-bridge
       tags: [ mqtt, mosquitto ]
