@@ -10,16 +10,6 @@ When `armed`, `disarmed`, `arm-failed` or `disarm-failed` events appear on `werk
 
 In addition, it publishes a `color`, `fade` etc. event to `werkstatt/blink1`. Other components may be interested.
 
-## `MQTT::Keyboard` sensor
-
-Publishes a `text-entered` event to `werkstatt/keyboard` where the payload is the entered text.
-
-## `MQTT::Lock` processor
-
-Upon a `text-entered` event in `werkstatt/keyboard`, decides whether the payload (entered text) is satisfactory to arm or disarm it. On success it publishes a `armed` or `disarmed` event to `werkstatt/lock`;
-
-If the arm/disarm failed, it publishes an `arm-failed` or `disarm-failed` event.
-
 ## `MQTT::Motion` sensor
 
 Publishes `motion-started` and `motion-ended` events to `werkstatt/motion` as it detects it.
@@ -95,7 +85,5 @@ On Debian boxes (like the Raspberry Pi), the invocation is slightly different: `
   => some are useful as events that can be show in graphs (e.g. motion detected, alarm disarmed, etc.) => https://gist.github.com/suhlig/049b068185f216824d33756dae99172a
 
 * Delay arming a couple of seconds after it being enabled, so we don't raise an alert on our way out
-* Use MAC address as client ID (there shall be only one keyboard; the last one connecting wins)
 * Tests?
-* Can we [blink the keyboard LED](https://hewner.github.io/2006/08/21/evdev-for-ruby-with-morse-code/)?
 * Add an SSD1306 display, just for kicks

@@ -20,11 +20,6 @@ module MQTT
 
       @router = MQTT::Router.new(broker: @broker, logger: @logger)
 
-      @router.add_route('werkstatt/keyboard') do |_, t, message|
-        @logger.debug(self.class.name) { "Received in #{t}: #{message}" }
-        on_keyboard(message)
-      end
-
       @router.add_route('werkstatt/nfc') do |_, t, message|
         @logger.debug(self.class.name) { "Received in #{t}: #{message}" }
         on_nfc(message)
@@ -58,31 +53,6 @@ module MQTT
           @motion.stop
         else
           @logger.debug(self.class.name) { "Keeping Motion at #{@motion.status}" }
-      end
-    end
-
-    def on_keyboard(chars)
-      @logger.info(self.class.name) { "Received keyboard chars '#{chars}'" }
-
-      case chars[0]
-      when '+' # attempt to disarm
-        change_state('disarming')
-
-        if chars[1..] != @code
-          change_state('disarm-failed')
-        else
-          change_state('disarmed')
-        end
-      when '-' # attempt to arm
-        change_state('arming')
-
-        if chars[1..] != @code
-          change_state('arm-failed')
-        else
-          change_state('armed')
-        end
-      else # tamper
-        @logger.warn(self.class.name) { "Ignoring keyboard input '#{chars}'" }
       end
     end
 

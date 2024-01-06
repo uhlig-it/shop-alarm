@@ -1,28 +1,29 @@
----
 - name: Deploy the shop alarm system
   hosts: all
   become: true
   gather_facts: false
-
   vars:
     ansible_python_interpreter: /usr/bin/python3
     app_dir: "{{ ansistrano_deploy_to }}/current"
-
     blink1_mqtt_topic: werkstatt/blink1
     lock_mqtt_topic: werkstatt/lock
-
-    keyboard_mqtt_topic: werkstatt/keyboard
-    keyboard_device: /dev/input/event0
-    keyboard_timeout: 3
-
     nfc_mqtt_topic: werkstatt/nfc
-
     pir_mqtt_topic: werkstatt/pir
     pir_gpio: GPIO23
-
     # motion_mqtt_topic: werkstatt/motion
     # mqtt_telegram_mqtt_topic: werkstatt/telegram
-
+  tasks:
+    - name: mqtt-keyboard is absent
+      systemd:
+        name: mqtt-keyboard.service
+        status: stopped
+        enabled: false
+        daemon_reload: true
+      become: true
+    - name: Service template is absent
+      file:
+        dest: /etc/systemd/system/mqtt-keyboard.service
+      become: true
   roles:
     - role: iBeacon
       vars:
@@ -41,8 +42,6 @@
       tags: [ mqtt, deploy, alarm ]
     - role: mqtt-blink1
       tags: [ mqtt, blink1 ]
-    - role: mqtt-keyboard
-      tags: [ mqtt, keyboard ]
     - role: mqtt-lock
       tags: [ mqtt, lock, alarm ]
     # - role: mqtt-motion
