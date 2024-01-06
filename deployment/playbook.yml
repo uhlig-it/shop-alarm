@@ -1,16 +1,25 @@
 - name: Deploy the shop alarm system
   hosts: all
-  become: true
+  become: false
   gather_facts: false
   vars:
     ansible_python_interpreter: /usr/bin/python3
-    app_dir: "{{ ansistrano_deploy_to }}/current"
-    blink1_mqtt_topic: werkstatt/blink1
-    lock_mqtt_topic: werkstatt/lock
-    nfc_mqtt_topic: werkstatt/nfc
+    blink1_mqtt_command_topic: werkstatt/blink1/cmnd
+    blink1_mqtt_status_topic: werkstatt/blink1/status
+    lock_mqtt_command_topic: werkstatt/lock/cmnd
+    lock_mqtt_status_topic: werkstatt/lock/status
+    nfc_mqtt_status_topic: werkstatt/nfc/status
     # motion_mqtt_topic: werkstatt/motion
     # mqtt_telegram_mqtt_topic: werkstatt/telegram
   roles:
+    - role: nerab.ruby
+      vars:
+        ruby_version:
+          major: 3
+          minor: 3
+          teeny: 0
+      become: true
+      tags: [ ruby ]
     - role: ansistrano.deploy
       become: false
       vars:
@@ -18,6 +27,11 @@
         ansistrano_deploy_to: /opt/shop-alarm
         ansistrano_current_via: symlink
         ansistrano_deploy_via: rsync
+        ansistrano_shared_paths:
+          - log
+          - tmp
+          - gems
+        ansistrano_keep_releases: 5
         ansistrano_before_setup_tasks_file: "{{ playbook_dir }}/roles/shop-alarm/tasks/owner.yml"
         ansistrano_after_symlink_tasks_file: "{{ playbook_dir }}/roles/shop-alarm/tasks/main.yml"
       tags: [ mqtt, deploy, alarm ]
@@ -25,9 +39,7 @@
       tags: [ mqtt, blink1 ]
     - role: mqtt-lock
       tags: [ mqtt, lock, alarm ]
-    # - role: mqtt-motion
-#    - role: mqtt-telegram
     - role: mqtt-nfc
       tags: [ mqtt, nfc ]
     - role: uhlig-it.ansible-role-mosquitto-bridge
-      tags: [ mqtt, mosquitto ]
+      tags: [ mqtt, mosquitto, bridge ]

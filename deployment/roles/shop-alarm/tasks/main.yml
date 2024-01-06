@@ -1,20 +1,28 @@
+- name: bundler is installed
+  gem:
+    name: bundler
+  become: true
+  tags: ruby, gem, bundler, config, deployment
+- name: bundler's path points to writable location
+  command:
+    cmd: bundle config --local path {{ ansistrano_shared_path }}/gems
+  become: false
+  tags: ruby, bundler, config, deployment
 - name: bundler's deployment mode is enabled
-  shell:
+  command:
     cmd: bundle config --local set deployment 'true'
-    chdir: "{{ app_dir }}"
+    chdir: "{{ ansistrano_release_path.stdout }}"
   become: false
   tags: ruby, bundler, config, deployment
-
 - name: bundler is not installing development gems
-  shell:
+  command:
     cmd: bundle config --local set without development
-    chdir: "{{ app_dir }}"
+    chdir: "{{ ansistrano_release_path.stdout }}"
   become: false
   tags: ruby, bundler, config, deployment
-
 - name: Ruby dependendies are up-to-date
   bundler:
     state: present
-    chdir: "{{ app_dir }}"
+    chdir: "{{ ansistrano_release_path.stdout }}"
   become: false
   tags: app, ruby, bundler

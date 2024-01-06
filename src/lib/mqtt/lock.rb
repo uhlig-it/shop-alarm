@@ -3,16 +3,17 @@ require 'json'
 
 module MQTT
   # broker: MQTT broker to publish state updates
-  # topic: which topic to publish state updates to
+  # command_topic: which topic to accept commands on
+  # status_topic: which topic to publish state updates to
   # code: the secret to arm and disarm the lock
   # motion: camera interface
   #
   # TODO There is at least one state machine hidden that would publish on state transitions
   #
   class Lock
-    def initialize(broker:, topic:, code:, logger:, motion:)
+    def initialize(broker:, command_topic:, status_topic:, code:, logger:, motion:)
       @broker = broker
-      @topic = topic
+      @status_topic = status_topic
       @code = code
       @motion = motion
       @logger = logger
@@ -20,9 +21,15 @@ module MQTT
 
       @router = MQTT::Router.new(broker: @broker, logger: @logger)
 
-      @router.add_route('werkstatt/nfc') do |_, t, message|
+      # TODO Move to MQTT router
+      @router.add_route('werkstatt/nfc/status') do |_, t, message|
         @logger.debug(self.class.name) { "Received in #{t}: #{message}" }
         on_nfc(message)
+      end
+
+      @router.add_route(command_topic) do |_, t, message|
+        @logger.debug(self.class.name) { "Received in #{t}: #{message}" }
+        # TODO check that code is correct and if so, change state
       end
     end
 
@@ -36,8 +43,8 @@ module MQTT
       @logger.debug(self.class.name) { "Changing state from #{@state} to #{new_state}" }
       @state = new_state
 
-      @logger.debug(self.class.name) { "Publishing new state to #{@topic}: #{@state}" }
-      @broker.publish(@topic, @state)
+      @logger.debug(self.class.name) { "Publishing new state to #{@status_topic}: #{@state}" }
+      @broker.publish(@status_topic, @state)
 
       case @state
         when 'armed'

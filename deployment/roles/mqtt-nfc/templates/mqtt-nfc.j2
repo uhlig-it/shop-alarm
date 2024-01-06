@@ -11,7 +11,7 @@ user_agent="${2:?Missing user agent. Needs to be the second argument.}"
 
 mosquitto_pub \
   {% if 'mqtts' in shopalarm_mqtt_url %}--capath /etc/ssl/certs{% endif %} \
-  --url "{{ shopalarm_mqtt_url }}/{{ nfc_mqtt_topic }}" \
+  --url "{{ shopalarm_mqtt_url }}/{{ nfc_mqtt_status_topic }}" \
   --message "$(envsubst <<EOM
   {
     "scanned": {
