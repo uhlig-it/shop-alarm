@@ -4,13 +4,12 @@
   gather_facts: false
   vars:
     ansible_python_interpreter: /usr/bin/python3
-    blink1_mqtt_command_topic: werkstatt/blink1/cmnd
-    blink1_mqtt_status_topic: werkstatt/blink1/status
     lock_mqtt_command_topic: werkstatt/lock/cmnd
     lock_mqtt_status_topic: werkstatt/lock/status
     nfc_mqtt_status_topic: werkstatt/nfc/status
     # motion_mqtt_topic: werkstatt/motion
     # mqtt_telegram_mqtt_topic: werkstatt/telegram
+    ansistrano_deploy_to: /opt/shop-alarm # needs to be global because other roles rely on it
   roles:
     - role: nerab.ruby
       vars:
@@ -24,7 +23,6 @@
       become: false
       vars:
         ansistrano_deploy_from: "{{ playbook_dir }}/../src/"
-        ansistrano_deploy_to: /opt/shop-alarm
         ansistrano_current_via: symlink
         ansistrano_deploy_via: rsync
         ansistrano_shared_paths:
@@ -35,11 +33,9 @@
         ansistrano_before_setup_tasks_file: "{{ playbook_dir }}/roles/shop-alarm/tasks/owner.yml"
         ansistrano_after_symlink_tasks_file: "{{ playbook_dir }}/roles/shop-alarm/tasks/main.yml"
       tags: [ mqtt, deploy, alarm ]
-    - role: mqtt-blink1
-      tags: [ mqtt, blink1 ]
     - role: mqtt-lock
       tags: [ mqtt, lock, alarm ]
     - role: mqtt-nfc
-      tags: [ mqtt, nfc ]
+      tags: [ mqtt, nfc, alarm ]
     - role: uhlig-it.ansible-role-mosquitto-bridge
       tags: [ mqtt, mosquitto, bridge ]

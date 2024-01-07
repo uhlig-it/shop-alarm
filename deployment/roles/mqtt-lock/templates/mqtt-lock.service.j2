@@ -4,8 +4,8 @@ Documentation=https://github.com/uhlig-it/shop-alarm
 After=network-online.target
 
 [Service]
-WorkingDirectory={{ ansistrano_release_path.stdout }}
-ExecStart={{ ansistrano_release_path.stdout }}/bin/mqtt-lock \
+WorkingDirectory={{ ansistrano_deploy_to }}/current
+ExecStart={{ ansistrano_deploy_to }}/current/bin/mqtt-lock \
             --code {{ shopalarm_lock_code }} \
             --mqtt {{ shopalarm_mqtt_url }} \
             --command-topic {{ lock_mqtt_command_topic }} \
