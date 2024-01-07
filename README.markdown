@@ -8,10 +8,6 @@ A workshop security system based on events published to MQTT.
 
 Publishes a `scanned` event to `werkstatt/nfc/status` as it is called via SSH. It passes the NFC tag's ID as well as the calling user agent (e.g. `iPhoneSteffen`).
 
-## `MQTT::Telegram` actor
-
-Subscribes to `werkstatt/telegram`. Upon `message` events, sends the payload of the event to Telegram.
-
 ## `MQQT::Lock` service
 
 TODO

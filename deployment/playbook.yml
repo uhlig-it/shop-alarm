@@ -8,7 +8,6 @@
     lock_mqtt_status_topic: werkstatt/lock/status
     nfc_mqtt_status_topic: werkstatt/nfc/status
     # motion_mqtt_topic: werkstatt/motion
-    # mqtt_telegram_mqtt_topic: werkstatt/telegram
     ansistrano_deploy_to: /opt/shop-alarm # needs to be global because other roles rely on it
   roles:
     - role: nerab.ruby
