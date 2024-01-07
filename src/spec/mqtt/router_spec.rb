@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'mqtt'
 require_relative '../../lib/mqtt/router'
 require 'rspec/eventually'
