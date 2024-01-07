@@ -3,7 +3,6 @@
   become: false
   gather_facts: false
   vars:
-    ansible_python_interpreter: /usr/bin/python3
     lock_mqtt_command_topic: werkstatt/lock/cmnd
     lock_mqtt_status_topic: werkstatt/lock/status
     nfc_mqtt_status_topic: werkstatt/nfc/status
@@ -17,6 +16,8 @@
           teeny: 0
       become: true
       tags: [ ruby ]
+    - role: uhlig-it.ansible-role-mosquitto-bridge
+      tags: [ mqtt, mosquitto, bridge ]
     - role: ansistrano.deploy
       become: false
       vars:
@@ -28,12 +29,10 @@
           - tmp
           - gems
         ansistrano_keep_releases: 5
-        ansistrano_before_setup_tasks_file: "{{ playbook_dir }}/roles/shop-alarm/tasks/owner.yml"
-        ansistrano_after_symlink_tasks_file: "{{ playbook_dir }}/roles/shop-alarm/tasks/main.yml"
-      tags: [ mqtt, deploy, alarm ]
+        ansistrano_before_setup_tasks_file: "{{ playbook_dir }}/roles/mqtt-lock/tasks/owner.yml"
+        ansistrano_after_symlink_tasks_file: "{{ playbook_dir }}/roles/mqtt-lock/tasks/bundle.yml"
+      tags: [ mqtt, lock, deploy ]
     - role: mqtt-lock
-      tags: [ mqtt, lock, alarm ]
+      tags: [ mqtt, lock ]
     - role: mqtt-nfc
-      tags: [ mqtt, nfc, alarm ]
-    - role: uhlig-it.ansible-role-mosquitto-bridge
-      tags: [ mqtt, mosquitto, bridge ]
+      tags: [ mqtt, nfc ]
