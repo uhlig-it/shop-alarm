@@ -16,8 +16,6 @@
           teeny: 0
       become: true
       tags: [ ruby ]
-    - role: uhlig-it.ansible-role-mosquitto-bridge
-      tags: [ mqtt, mosquitto, bridge ]
     - role: ansistrano.deploy
       become: false
       vars:
