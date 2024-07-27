@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require_relative 'router'
 require 'json'
 
@@ -29,7 +31,7 @@ module MQTT
 
       @router.add_route(command_topic) do |_, t, message|
         @logger.debug(self.class.name) { "Received in #{t}: #{message}" }
-        # TODO check that code is correct and if so, change state
+        on_command(message)
       end
     end
 
@@ -47,14 +49,43 @@ module MQTT
       @broker.publish(@status_topic, @state)
 
       case @state
-        when 'armed'
-          @logger.debug(self.class.name) { "Starting Motion from previous #{@motion.status}" }
-          @motion.start
-        when 'disarmed'
-          @logger.debug(self.class.name) { "Stopping Motion from previous #{@motion.status}" }
-          @motion.stop
-        else
-          @logger.debug(self.class.name) { "Keeping Motion at #{@motion.status}" }
+      when 'armed'
+        @logger.debug(self.class.name) { "Starting Motion from previous #{@motion.status}" }
+        @motion.start
+      when 'disarmed'
+        @logger.debug(self.class.name) { "Stopping Motion from previous #{@motion.status}" }
+        @motion.stop
+      else
+        @logger.debug(self.class.name) { "Keeping Motion at #{@motion.status}" }
+      end
+    end
+
+    def on_command(message)
+      @logger.info(self.class.name) { "Received command '#{message}'" }
+
+      msg = JSON.parse(message)
+
+      if msg['code'] != @code
+        @logger.warn(self.class.name) { "Ignoring command because it has no or the wrong code: '#{msg}'" }
+        return
+      end
+
+      if msg.key?('action')
+        action = msg['action']
+      else
+        @logger.warn(self.class.name) { "Ignoring command because it has no 'action': '#{msg}'" }
+        return
+      end
+
+      case action
+      when 'arm'
+        @logger.info(self.class.name) { "Armed via command by '#{msg['user-agent']}'" }
+        change_state('armed')
+      when 'disarm'
+        @logger.info(self.class.name) { "Disarmed via command by '#{msg['user-agent']}'" }
+        change_state('disarmed')
+      else
+        @logger.warn(self.class.name) { "Ignoring action '#{action}'" }
       end
     end
 
