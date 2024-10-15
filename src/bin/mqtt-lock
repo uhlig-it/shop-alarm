@@ -29,7 +29,7 @@ OptionParser.new do |opts|
 
     Options:
   EOM
-  opts.version = '1.0.0'
+  opts.version = '2.0.0'
 
   opts.on('-v', '--verbose', 'Run verbosely. Repeat for even more verbosity.') do
     logger.level = logger.level - 1 if logger.level > 0
