@@ -8,16 +8,11 @@ module MQTT
   # command_topic: which topic to accept commands on
   # status_topic: which topic to publish state updates to
   # code: the secret to arm and disarm the lock
-  # motion: camera interface
-  #
-  # TODO There is at least one state machine hidden that would publish on state transitions
-  #
   class Lock
-    def initialize(broker:, command_topic:, status_topic:, code:, logger:, motion:)
+    def initialize(broker:, command_topic:, status_topic:, code:, logger:)
       @broker = broker
       @status_topic = status_topic
       @code = code
-      @motion = motion
       @logger = logger
       @state = nil
 
@@ -47,17 +42,6 @@ module MQTT
 
       @logger.debug(self.class.name) { "Publishing new state to #{@status_topic}: #{@state}" }
       @broker.publish(@status_topic, @state)
-
-      case @state
-      when 'armed'
-        @logger.debug(self.class.name) { "Starting Motion from previous #{@motion.status}" }
-        @motion.start
-      when 'disarmed'
-        @logger.debug(self.class.name) { "Stopping Motion from previous #{@motion.status}" }
-        @motion.stop
-      else
-        @logger.debug(self.class.name) { "Keeping Motion at #{@motion.status}" }
-      end
     end
 
     def on_command(message)

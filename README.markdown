@@ -29,10 +29,9 @@ Ansible will deploy the service, enable and start it.
 
 # TODO
 
-* Metrics, e.g. the lock state and when motion detected some, well, motion
+* Metrics, e.g. the lock state
   => some are useful as numeric data (e.g. how long an alert went on)
-  => some are useful as events that can be show in graphs (e.g. motion detected, alarm disarmed, etc.) => https://gist.github.com/suhlig/049b068185f216824d33756dae99172a
-* On first start, `motion` needs to be restarted; otherwise the camera will be almost black
+  => some are useful as events that can be show in graphs (e.g. alarm disarmed, etc.) => https://gist.github.com/suhlig/049b068185f216824d33756dae99172a
 * Some topics are still hardcoded (`werkstatt/lock`)
 * Delay arming a couple of seconds after it being enabled, so we don't raise an alert on our way out
 * Tests?

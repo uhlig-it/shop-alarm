@@ -9,7 +9,6 @@ require 'pathname'
 require 'mqtt'
 
 require_relative '../lib/mqtt/lock'
-require_relative '../lib/motion/web_controller'
 
 options = {
   code: nil,
@@ -61,7 +60,6 @@ begin
     status_topic: options[:mqtt][:status_topic],
     command_topic: options[:mqtt][:command_topic],
     code: options[:code],
-    motion: Motion::WebController.new,
     logger: logger
   ).start!
 rescue MQTT::ProtocolException => err
