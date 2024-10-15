@@ -2,10 +2,8 @@
 
 source 'https://rubygems.org'
 
-gem 'evdev' if RUBY_PLATFORM =~ /linux/
 gem 'mqtt'
 gem 'http'
-gem 'rb-blink1'
 
 group :development do
   gem 'bundler'
