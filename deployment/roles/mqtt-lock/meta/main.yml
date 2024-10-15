@@ -4,4 +4,4 @@ dependencies:
       ruby_version:
         major: 3
         minor: 3
-        teeny: 0
+        teeny: 5
