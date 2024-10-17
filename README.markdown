@@ -1,5 +1,7 @@
 # Shop Alarm
 
+> Status: replaced by the [mqtt-router](https://github.com/uhlig-it/mqtt-router).
+
 A workshop security system based on events published to MQTT.
 
 # Components
