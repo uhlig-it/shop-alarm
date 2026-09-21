@@ -1,7 +1,0 @@
-dependencies:
-  - role: nerab.ruby
-    vars:
-      ruby_version:
-        major: 3
-        minor: 3
-        teeny: 5

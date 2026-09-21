@@ -1,1 +1,3 @@
-.vscode
+/alarm-core
+state.json
+*.log

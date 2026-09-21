@@ -1,5 +1,0 @@
---color
---format documentation
---tty
---order random
---require 'spec_helper'
