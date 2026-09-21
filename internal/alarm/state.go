@@ -118,6 +118,7 @@ type Core struct {
 
 	frigateAvailable    string // "", "online", "stopped", "offline"
 	frigateDetectStatus *bool  // stream-process health (nil = unknown)
+	frigateAPIDown      *bool  // Frigate /api/stats unreachable (nil = unknown)
 	detectOn            *bool  // authoritative switch signal
 	recordingsOn        *bool
 	bridgeUp            *bool
@@ -203,11 +204,20 @@ func (c *Core) desiredProfile() string {
 }
 
 func (c *Core) cameraLost() bool {
-	switch c.frigateAvailable {
-	case "stopped", "offline":
+	// Live stream-process loss is authoritative: frigate publishes
+	// status/detect only on real process state changes.
+	if c.frigateDetectStatus != nil && !*c.frigateDetectStatus {
 		return true
 	}
-	return c.frigateDetectStatus != nil && !*c.frigateDetectStatus
+	// frigate/available offline alone is NOT loss: the topic goes stale
+	// (retained "offline") whenever the broker restarts and frigate's
+	// reconnect does not republish the availability. Only trust it when the
+	// Frigate API is also unreachable (fresh, opus-side signal).
+	switch c.frigateAvailable {
+	case "stopped", "offline":
+		return c.frigateAPIDown != nil && *c.frigateAPIDown
+	}
+	return false
 }
 
 func (c *Core) faultPayloadLocked() []byte {
@@ -594,13 +604,21 @@ func (c *Core) frigateLossEvent(acts *[]func()) {
 	if c.data.State == StateArming || c.data.State == StateDisarmed {
 		return // supervision applies while armed/pending only
 	}
-	c.setFaultLocked(acts, "frigate_loss", map[string]any{
-		"frigate_available":    c.frigateAvailable,
-		"detect_status_online": c.frigateDetectStatus != nil && *c.frigateDetectStatus,
-	})
-	*acts = append(*acts, func() {
-		c.out.Notify(4, "Supervision: camera lost", "Frigate or the shop camera stream is down while armed.")
-	})
+	if !c.cameraLost() {
+		return // available-offline alone is a stale LWT, not loss
+	}
+	// Notify once per episode: repeated deliveries of the same loss signal
+	// (e.g. the retained storm at connect) must not re-notify.
+	if _, ok := c.faults["frigate_loss"]; !ok {
+		c.setFaultLocked(acts, "frigate_loss", map[string]any{
+			"frigate_available":    c.frigateAvailable,
+			"detect_status_online": c.frigateDetectStatus != nil && *c.frigateDetectStatus,
+			"api_down":             c.frigateAPIDown != nil && *c.frigateAPIDown,
+		})
+		*acts = append(*acts, func() {
+			c.out.Notify(4, "Supervision: camera lost", "Frigate or the shop camera stream is down while armed.")
+		})
+	}
 }
 
 // BridgeState tracks $SYS/broker/connection/<remote>/state on opus (1/0).
@@ -665,6 +683,25 @@ func (c *Core) BridgeLossExpired() {
 			return
 		}
 		c.trigger(acts, "bridge_loss")
+	})
+}
+
+// FrigateAPIUnreachable tracks whether the Frigate API (fresh, opus-side
+// signal) is reachable. Down-transitions re-evaluate the camera-loss
+// condition; recovery clears the fault.
+func (c *Core) FrigateAPIUnreachable(down bool) {
+	c.commit(func(acts *[]func()) {
+		old := c.frigateAPIDown != nil && *c.frigateAPIDown
+		if old == down {
+			return
+		}
+		c.frigateAPIDown = &down
+		if down {
+			c.frigateLossEvent(acts)
+		} else {
+			c.clearFaultLocked(acts, "frigate_loss")
+			*acts = append(*acts, c.attributesAct())
+		}
 	})
 }
 

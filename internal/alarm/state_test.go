@@ -296,6 +296,8 @@ func TestSupervisionCameraLoss(t *testing.T) {
 	c.Command(CmdArmAway)
 	c.Door(false)
 
+	// Frigate gone: MQTT offline AND API unreachable.
+	c.FrigateAPIUnreachable(true)
 	c.FrigateAvailable("offline")
 	if got := c.Snapshot().State; got != StateArmedAway {
 		t.Fatalf("state changed to %s, want armed_away", got)
@@ -319,6 +321,76 @@ func TestSupervisionCameraLoss(t *testing.T) {
 	c.FrigateAvailable("online")
 	if len(r.faults) == 0 || len(r.faults[len(r.faults)-1]) != 0 {
 		t.Fatal("fault not cleared after recovery")
+	}
+}
+
+// A stale retained frigate/available=offline (e.g. after a broker restart,
+// when frigate reconnects without republishing availability) must NOT
+// fault, notify or escalate while the stream and API are healthy — this is
+// the incident of 2026-09-21 (notification storm).
+func TestStaleAvailableOfflineIgnored(t *testing.T) {
+	r := &recorder{}
+	c, clock := testCore(t, r)
+	armedBaseline(c)
+	c.Command(CmdArmAway)
+	c.Door(false)
+
+	c.FrigateAvailable("offline") // retained storm delivery
+	c.FrigateAvailable("offline") // repeated delivery
+	if len(r.notifies) != 0 {
+		t.Fatalf("notified %d times, want 0 for stale availability", len(r.notifies))
+	}
+	if len(r.faults) > 0 && len(r.faults[len(r.faults)-1]) > 0 {
+		t.Fatal("fault published for stale availability")
+	}
+	*clock = clock.Add(31 * time.Second)
+	c.FrigateLossExpired()
+	if got := c.Snapshot().State; got != StateArmedAway {
+		t.Fatalf("state = %s, want armed_away (no escalation)", got)
+	}
+}
+
+// Frigate gone for real: API polls fail, then the MQTT availability drops.
+func TestCameraLossWhenFrigateGone(t *testing.T) {
+	r := &recorder{}
+	c, clock := testCore(t, r)
+	armedBaseline(c)
+	c.Command(CmdArmAway)
+	c.Door(false)
+
+	c.FrigateAPIUnreachable(true)
+	c.FrigateAvailable("offline")
+	c.FrigateAvailable("offline") // second delivery: notify-once
+	if n := len(r.notifies); n != 1 {
+		t.Fatalf("notified %d times, want 1", n)
+	}
+	*clock = clock.Add(31 * time.Second)
+	c.FrigateLossExpired()
+	if got := c.Snapshot().State; got != StateTriggered {
+		t.Fatalf("state = %s, want triggered", got)
+	}
+
+	// API comes back: fault clears, timers disarm.
+	c.FrigateAPIUnreachable(false)
+	if len(r.faults) == 0 || len(r.faults[len(r.faults)-1]) != 0 {
+		t.Fatal("fault not cleared after API recovery")
+	}
+}
+
+// A live stream-process loss still triggers immediately, API healthy or not.
+func TestStreamLossTriggersDirectly(t *testing.T) {
+	r := &recorder{}
+	c, _ := testCore(t, r)
+	armedBaseline(c)
+	c.Command(CmdArmAway)
+	c.Door(false)
+
+	c.DetectStatus(false)
+	if len(r.notifies) == 0 {
+		t.Fatal("no notification for stream loss")
+	}
+	if len(r.faults) == 0 || len(r.faults[len(r.faults)-1]) == 0 {
+		t.Fatal("no fault for stream loss")
 	}
 }
 

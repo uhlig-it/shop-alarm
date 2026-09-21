@@ -1,6 +1,6 @@
 // Package metrics implements the werkstatt-* Prometheus gauges for the
 // monitoring dashboard (see monitoring/README.md). The exporter is folded
-// into alarm-core instead of running as a standalone service: alarm-core
+// into shop-alarm instead of running as a standalone service: shop-alarm
 // already subscribes to every MQTT topic behind these gauges.
 //
 // All Recorder methods are safe for concurrent use and nil-safe, so callers
@@ -51,6 +51,9 @@ type Recorder struct {
 
 	stats Stats
 
+	frigateAPIDown *bool
+	onFrigateAPI   func(down bool)
+
 	shopReachable *bool
 }
 
@@ -64,6 +67,34 @@ func b(v bool) float64 {
 		return 1
 	}
 	return 0
+}
+
+// SetFrigateAPIDown records whether the Frigate API polls are currently
+// failing and invokes the listener on every change.
+func (r *Recorder) SetFrigateAPIDown(down bool) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	old := r.frigateAPIDown != nil && *r.frigateAPIDown
+	changed := r.frigateAPIDown == nil || old != down
+	r.frigateAPIDown = &down
+	fn := r.onFrigateAPI
+	r.mu.Unlock()
+	if changed && fn != nil {
+		fn(down)
+	}
+}
+
+// SetFrigateAPIListener installs the callback fired on Frigate API
+// reachability transitions. Called from the stats poller goroutine.
+func (r *Recorder) SetFrigateAPIListener(fn func(down bool)) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	r.onFrigateAPI = fn
+	r.mu.Unlock()
 }
 
 // SetAlarmState records the active alarm state (disarmed, arming,
@@ -261,6 +292,10 @@ func (r *Recorder) Render() string {
 
 	if r.shopReachable != nil {
 		gauge(&w, "werkstatt_shop_reachable", "Shop broker TCP-reachable from opus.", b(*r.shopReachable))
+	}
+
+	if r.frigateAPIDown != nil {
+		gauge(&w, "werkstatt_frigate_api_reachable", "Frigate API reachable (0 = last polls failed).", b(!*r.frigateAPIDown))
 	}
 
 	return w.String()

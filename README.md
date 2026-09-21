@@ -1,4 +1,4 @@
-# Workshop Alarm — alarm-core
+# Workshop Alarm — shop-alarm
 
 State machine and supervision for the workshop alarm: arming preconditions, exit/entry delays, trigger fusion (door, person detection, PIR, fire/smoke audio), Frigate profile switching, supervision of the shop bridge and camera, audit events, and the monitoring exporter for the werkstatt dashboard.
 
@@ -9,9 +9,9 @@ Status: implemented and covered by `go test ./...` (state machine, engine wiring
 ## Run
 
 ```sh
-MQTT_URL=tcp://localhost:1883 MQTT_USER=alarm-core MQTT_PASSWORD=... \
-STATE_FILE=/var/lib/alarm-core/state.json HEALTH_ADDR=:9101 \
-./alarm-core
+MQTT_URL=tcp://localhost:1883 MQTT_USER=shop-alarm MQTT_PASSWORD=... \
+STATE_FILE=/var/lib/shop-alarm/state.json HEALTH_ADDR=:9101 \
+./shop-alarm
 ```
 
 ## Configuration (environment variables)
@@ -20,7 +20,7 @@ STATE_FILE=/var/lib/alarm-core/state.json HEALTH_ADDR=:9101 \
 |---|---|---|
 | `MQTT_URL`, `MQTT_USER`, `MQTT_PASSWORD` | `tcp://localhost:1883` | broker connection |
 | `TOPIC_PREFIX` | `werkstatt` | root of the alarm topics |
-| `STATE_FILE` | `/var/lib/alarm-core/state.json` | persisted state and deadlines |
+| `STATE_FILE` | `/var/lib/shop-alarm/state.json` | persisted state and deadlines |
 | `HEALTH_ADDR` | `:8080` | serves `/healthz` and `/metrics` (set `:9101` for the scrape target) |
 | `EXIT_DELAY` | `60s` | arming → door-closed-or-arm deadline |
 | `DOOR_ESCALATION_DELAY` | `60s` | extra delay with the door still open → triggered |

@@ -142,7 +142,7 @@ func testEngineConfig(t *testing.T) config.Config {
 	return config.Config{
 		TopicRoot:                   "werkstatt",
 		BrokerURL:                   "tcp://localhost:1883",
-		ClientID:                    "alarm-core-test",
+		ClientID:                    "shop-alarm-test",
 		FrigateProfileTopic:         "frigate/profile/set",
 		FrigateAvailableTopic:       "frigate/available",
 		FrigateDetectStateTopic:     "frigate/werkstatt/detect/state",

@@ -1,5 +1,5 @@
 // Package notify implements the ntfy backup notification channel for
-// alarm-core. It posts JSON messages to a configured ntfy URL and, when a
+// shop-alarm. It posts JSON messages to a configured ntfy URL and, when a
 // Frigate API is configured and a review id is known, attaches the review
 // snapshot as a multipart file. All failures degrade to a log line so the
 // alarm state machine never depends on notifications.

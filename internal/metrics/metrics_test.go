@@ -158,6 +158,34 @@ func TestStatsPollerOptionalFieldsOmitted(t *testing.T) {
 	}
 }
 
+// Frigate 0.18 reports some per-camera fields as strings (observed:
+// terrasse.connection_quality); a broken/never-connected camera must not
+// kill the whole stats parse, and the busy camera's numbers must survive.
+func TestParseStatsToleratesStringFields(t *testing.T) {
+	body := `{"detection_fps":13.7,"cameras":{"werkstatt":{"camera_fps":6.2,"connection_quality":"97.5"},"terrasse":{"camera_fps":"N/A","connection_quality":"N/A"}}}`
+	s, err := parseStats([]byte(body), "werkstatt")
+	if err != nil {
+		t.Fatalf("parse with string fields failed: %v", err)
+	}
+	if s.DetectionFPS == nil || *s.DetectionFPS != 13.7 {
+		t.Fatalf("detection_fps = %v", s.DetectionFPS)
+	}
+	if s.CameraFPS == nil || *s.CameraFPS != 6.2 {
+		t.Fatalf("camera_fps = %v", s.CameraFPS)
+	}
+	if s.ConnectionQuality == nil || *s.ConnectionQuality != 97.5 {
+		t.Fatalf("connection_quality = %v", s.ConnectionQuality)
+	}
+
+	s2, err := parseStats([]byte(body), "terrasse")
+	if err != nil {
+		t.Fatalf("parse for the broken camera failed: %v", err)
+	}
+	if s2.CameraFPS != nil || s2.ConnectionQuality != nil {
+		t.Fatalf("N/A string fields must become nil, got %+v", s2)
+	}
+}
+
 func TestStatsPollerAuth(t *testing.T) {
 	var (
 		mu      sync.Mutex
@@ -182,6 +210,54 @@ func TestStatsPollerAuth(t *testing.T) {
 		defer mu.Unlock()
 		return gotUser == "frigate"
 	}, "basic auth header")
+}
+
+// Poll failures must flip the API-down signal only after the threshold, and
+// a successful poll must flip it back (camera-loss rule input).
+func TestStatsPollerFailuresFlipAPIDown(t *testing.T) {
+	var (
+		mu sync.Mutex
+		n  int
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		n++
+		count := n
+		mu.Unlock()
+		if count <= 2 {
+			http.Error(w, "boom", http.StatusInternalServerError)
+			return
+		}
+		fmt.Fprint(w, `{"detection_fps":1}`)
+	}))
+	defer srv.Close()
+
+	r := NewRecorder()
+	transitions := make(chan bool, 4)
+	r.SetFrigateAPIListener(func(d bool) {
+		transitions <- d
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// Threshold 2: two failed polls -> down; the next success -> up.
+	r.StartStatsPoller(ctx, StatsOptions{BaseURL: srv.URL, Camera: "werkstatt", FailThreshold: 2}, 5*time.Millisecond)
+
+	select {
+	case v := <-transitions:
+		if !v {
+			t.Fatalf("first transition = %v, want down=true after threshold", v)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("no down transition")
+	}
+	select {
+	case v := <-transitions:
+		if v {
+			t.Fatalf("second transition = %v, want down=false on recovery", v)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("no recovery transition")
+	}
 }
 
 func waitFor(t *testing.T, cond func() bool, msg string) {

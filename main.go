@@ -96,22 +96,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Monitoring collectors (exporter folded into alarm-core; the scrape
+	// Monitoring collectors (exporter folded into shop-alarm; the scrape
 	// target is this process's /metrics endpoint).
 	ctx := context.Background()
 	recorder.StartProber(ctx, cfg.ShopProbeAddr, cfg.ProbeInterval)
 	if cfg.FrigateAPIURL != "" {
 		recorder.StartStatsPoller(ctx, metrics.StatsOptions{
-			BaseURL: cfg.FrigateAPIURL,
-			User:    cfg.FrigateAPIUser,
-			Pass:    cfg.FrigateAPIPass,
-			Camera:  cfg.FrigateCameraName,
+			BaseURL:       cfg.FrigateAPIURL,
+			User:          cfg.FrigateAPIUser,
+			Pass:          cfg.FrigateAPIPass,
+			Camera:        cfg.FrigateCameraName,
+			FailThreshold: cfg.StatsFailThreshold,
 		}, cfg.StatsInterval)
 	}
 
 	go serveHealth(cfg.HealthAddr, recorder)
 
-	slog.Info("alarm-core started", "version", versionNumber, "topic_root", cfg.TopicRoot)
+	slog.Info("shop-alarm started", "version", versionNumber, "topic_root", cfg.TopicRoot)
 	select {}
 }
 

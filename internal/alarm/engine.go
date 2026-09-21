@@ -91,7 +91,17 @@ func NewEngine(cfg config.Config, client mqtt.Client, core *Core, n Notifier, m 
 		e.stateFileExists = true
 		core.Restore(d)
 	}
+	if m != nil {
+		m.SetFrigateAPIListener(e.onFrigateAPIDown)
+	}
 	return e
+}
+
+// onFrigateAPIDown runs from the stats poller goroutine whenever the Frigate
+// API reachability flips; the loss rule re-evaluates and timers re-arm.
+func (e *Engine) onFrigateAPIDown(down bool) {
+	e.core.FrigateAPIUnreachable(down)
+	e.supervision()
 }
 
 // Start runs after every MQTT (re)connect: subscribes first, then
@@ -765,7 +775,7 @@ func (e *Engine) publishDiscovery() {
 			"identifiers":  []string{"werkstatt_alarm"},
 			"name":         "Werkstatt",
 			"manufacturer": "uhlig-it",
-			"model":        "alarm-core",
+			"model":        "shop-alarm",
 		},
 	}
 	b, err := json.Marshal(d)

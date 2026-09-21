@@ -1,4 +1,4 @@
-// Package config reads the alarm-core configuration from environment
+// Package config reads the shop-alarm configuration from environment
 // variables (Docker-friendly) with defaults that match the live setup.
 package config
 
@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// Config holds the full alarm-core configuration.
+// Config holds the full shop-alarm configuration.
 type Config struct {
 	// MQTT
 	BrokerURL string
@@ -73,12 +73,16 @@ type Config struct {
 	// HA discovery
 	DiscoveryPrefix string
 
-	// Metrics (exporter folded into alarm-core; see monitoring/README.md)
+	// Metrics (exporter folded into shop-alarm; see monitoring/README.md)
 	HealthAddr        string // serves /healthz and /metrics
 	FrigateCameraName string // camera whose /api/stats fields are exported
 	ShopProbeAddr     string // TCP liveness probe target ("" disables)
 	ProbeInterval     time.Duration
 	StatsInterval     time.Duration // Frigate /api/stats poll cadence
+
+	// StatsFailThreshold counts consecutive failed /api/stats polls before
+	// the Frigate API is treated as unreachable (camera-loss rule input).
+	StatsFailThreshold int
 }
 
 // Load reads the configuration from the environment.
@@ -101,7 +105,7 @@ func Load() (Config, error) {
 		BrokerURL: env("MQTT_URL", "tcp://localhost:1883"),
 		Username:  os.Getenv("MQTT_USER"),
 		Password:  os.Getenv("MQTT_PASSWORD"),
-		ClientID:  env("MQTT_CLIENT_ID", "alarm-core"),
+		ClientID:  env("MQTT_CLIENT_ID", "shop-alarm"),
 		Verbose:   boolEnv("VERBOSE"),
 		TopicRoot: root,
 
@@ -124,7 +128,7 @@ func Load() (Config, error) {
 		RadioTopic:  env("RADIO_TOPIC", root+"/radio/cmnd"),
 		Blink1Topic: env("BLINK1_TOPIC", root+"/blink1/cmnd"),
 
-		StateFile: env("STATE_FILE", "/var/lib/alarm-core/state.json"),
+		StateFile: env("STATE_FILE", "/var/lib/shop-alarm/state.json"),
 
 		NTFYURL:        os.Getenv("NTFY_URL"),
 		LiveStreamURL:  os.Getenv("LIVE_STREAM_URL"),
@@ -182,6 +186,9 @@ func Load() (Config, error) {
 	if cfg.StatsInterval, err = dur("STATS_INTERVAL", 30*time.Second); err != nil {
 		return Config{}, err
 	}
+	if cfg.StatsFailThreshold, err = intEnv("STATS_FAIL_THRESHOLD", 3); err != nil {
+		return Config{}, err
+	}
 
 	return cfg, nil
 }
@@ -196,6 +203,18 @@ func env(name, def string) string {
 func boolEnv(name string) bool {
 	v, _ := strconv.ParseBool(os.Getenv(name))
 	return v
+}
+
+func intEnv(name string, def int) (int, error) {
+	v := os.Getenv(name)
+	if v == "" {
+		return def, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 1 {
+		return 0, fmt.Errorf("%s: %w", name, err)
+	}
+	return n, nil
 }
 
 func listEnv(name string) []string {
