@@ -51,7 +51,7 @@ STATE_FILE=/var/lib/shop-alarm/state.json HEALTH_ADDR=:9101 \
 
 ## Monitoring
 
-`/metrics` exposes the `werkstatt-*` gauges consumed by the monitoring dashboard (alarm state, door, bridge, Frigate switches/profile, device LWTs, Frigate stats, shop probe). Details in the monitoring README of the workspace.
+`/metrics` exposes the `werkstatt-*` gauges consumed by the monitoring dashboard (alarm state, door, bridge, Frigate switches/profile, device LWTs, Frigate stats, shop probe). Metric contract, dashboard and alerting rules: `monitoring/README.md`, dashboard `monitoring/werkstatt-dashboard.json` (Grafana, VictoriaMetrics datasource).
 
 ## License
 
