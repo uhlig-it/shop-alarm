@@ -150,11 +150,18 @@ func NewCore(cfg config.Config, out Sink, now func() time.Time) *Core {
 
 // commit runs fn under the lock; fn appends delayed side effects to acts,
 // which run after the lock is released (sinks may call back into the core).
+// Without a sink (NewEngine restores the persisted state before main.go
+// installs the engine as sink) the acts are dropped: reconcile() replays
+// them on connect.
 func (c *Core) commit(fn func(acts *[]func())) {
 	var acts []func()
 	c.mu.Lock()
 	fn(&acts)
+	hasSink := c.out != nil
 	c.mu.Unlock()
+	if !hasSink {
+		return
+	}
 	for _, act := range acts {
 		act()
 	}

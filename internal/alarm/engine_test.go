@@ -418,3 +418,28 @@ func TestMetricsReflectAlarmState(t *testing.T) {
 		}
 	}
 }
+
+// A persisted state file at startup must not panic: NewEngine restores it
+// before main.go installs the engine as sink, and reconcile() replays the
+// publishes on connect (crash loop observed live 2026-09-21, exit code 2).
+func TestNewEngineWithExistingStateFile(t *testing.T) {
+	cfg := testEngineConfig(t)
+	cfg.StateFile = t.TempDir() + "/state.json"
+	if err := SaveState(cfg.StateFile, Data{State: StateArmedAway, Updated: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+
+	client := newFakeClient()
+	rec := metrics.NewRecorder()
+	core := NewCore(cfg, nil, nil)
+	e := NewEngine(cfg, client, core, &recordingNotifier{}, rec) // must not panic
+	core.SetSink(e)
+	e.Start()
+
+	// The restored state is re-established on connect (reconcile replay).
+	waitFor(t, time.Second, func() bool { return client.pubCount("frigate/profile/set") > 0 }, "reconcile")
+	subs := client.pubsOn("werkstatt/alarm/state")
+	if len(subs) == 0 || subs[len(subs)-1].payload != "armed_away" {
+		t.Fatalf("state not re-published after restore: %+v", subs)
+	}
+}
