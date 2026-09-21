@@ -111,7 +111,13 @@ func (e *Engine) onFrigateAPIDown(down bool) {
 // subscription bursts are in flight.
 func (e *Engine) Start() {
 	e.subscribe()
-	e.Publish(e.t.available, []byte("online"), 1, true)
+	// Retained publishes go out at QoS 0: with clean-session=false and QoS 1,
+	// paho's in-flight store misfires during the retained storm at connect
+	// ("memorystore del: message N not found") and the retained state is
+	// silently dropped — observed live 2026-09-21. Retained state is
+	// republished on every transition anyway; mosquitto applies the retain
+	// flag at any QoS.
+	e.Publish(e.t.available, []byte("online"), 0, true)
 	e.publishDiscovery()
 	time.AfterFunc(e.cfg.ReconcileDelay, e.reconcile)
 	e.syncTimers(time.Now())
@@ -234,7 +240,7 @@ func (e *Engine) StateChanged(d Data) {
 	if err := SaveState(e.cfg.StateFile, d); err != nil {
 		slog.Error("state persist failed", "error", err)
 	}
-	e.Publish(e.t.state, []byte(string(d.State)), 1, true)
+	e.Publish(e.t.state, []byte(string(d.State)), 0, true)
 
 	// Compatibility alias for the replaced mqtt-router lock/status topic.
 	alias := "disarmed"
@@ -242,7 +248,7 @@ func (e *Engine) StateChanged(d Data) {
 	case StateArmedAway, StatePending, StateTriggered:
 		alias = "armed"
 	}
-	e.Publish(e.t.lockStatus, []byte(alias), 1, true)
+	e.Publish(e.t.lockStatus, []byte(alias), 0, true)
 
 	e.syncTimers(time.Now())
 	e.supervision()
@@ -256,7 +262,7 @@ func (e *Engine) FaultChanged(payload []byte) {
 	if payload == nil {
 		payload = []byte{}
 	}
-	e.Publish(e.t.fault, payload, 1, true)
+	e.Publish(e.t.fault, payload, 0, true)
 }
 
 func (e *Engine) Event(kind string, details map[string]string) {
@@ -291,7 +297,7 @@ func (e *Engine) Attributes(a Attributes) {
 		slog.Error("attributes marshal failed", "error", err)
 		return
 	}
-	e.Publish(e.t.attributes, b, 1, true)
+	e.Publish(e.t.attributes, b, 0, true)
 }
 
 func (e *Engine) Notify(priority int, title, message string) {
@@ -784,7 +790,7 @@ func (e *Engine) publishDiscovery() {
 		return
 	}
 	topic := e.cfg.DiscoveryPrefix + "/alarm_control_panel/werkstatt_alarm/config"
-	e.Publish(topic, b, 1, true)
+	e.Publish(topic, b, 0, true)
 	slog.Info("published HA discovery", "topic", topic)
 }
 
