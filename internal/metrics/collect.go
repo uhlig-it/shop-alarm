@@ -5,46 +5,11 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 )
-
-// probeTimeout bounds a single TCP reachability probe.
-const probeTimeout = 3 * time.Second
-
-// StartProber probes the shop broker over TCP until ctx is cancelled and
-// records the result as werkstatt_shop_reachable. It returns immediately.
-func (r *Recorder) StartProber(ctx context.Context, addr string, interval time.Duration) {
-	if r == nil || addr == "" || interval <= 0 {
-		return
-	}
-	go func() {
-		probe := func() {
-			conn, err := net.DialTimeout("tcp", addr, probeTimeout)
-			if err == nil {
-				_ = conn.Close()
-			}
-			r.SetShopReachable(err == nil)
-			if err != nil {
-				slog.Debug("shop probe failed", "addr", addr, "error", err)
-			}
-		}
-		probe()
-		t := time.NewTicker(interval)
-		defer t.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-t.C:
-				probe()
-			}
-		}
-	}()
-}
 
 // StatsOptions describes the Frigate stats endpoint.
 type StatsOptions struct {

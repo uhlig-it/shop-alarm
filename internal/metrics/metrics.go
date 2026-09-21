@@ -53,8 +53,6 @@ type Recorder struct {
 
 	frigateAPIDown *bool
 	onFrigateAPI   func(down bool)
-
-	shopReachable *bool
 }
 
 // NewRecorder returns an empty recorder.
@@ -198,16 +196,6 @@ func (r *Recorder) SetStats(s Stats) {
 	r.stats = s
 }
 
-// SetShopReachable records the shop TCP probe result.
-func (r *Recorder) SetShopReachable(up bool) {
-	if r == nil {
-		return
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.shopReachable = &up
-}
-
 func gauge(w *strings.Builder, name, help string, value float64) {
 	fmt.Fprintf(w, "# HELP %s %s\n# TYPE %s gauge\n%s %s\n", name, help, name, name, formatFloat(value))
 }
@@ -289,10 +277,6 @@ func (r *Recorder) Render() string {
 	ptrGauge(&w, "werkstatt_connection_quality", "Camera connection quality percentile (Frigate /api/stats).", r.stats.ConnectionQuality)
 	ptrGauge(&w, "werkstatt_reconnects_total", "Camera reconnect counter (Frigate /api/stats).", r.stats.Reconnects)
 	ptrGauge(&w, "werkstatt_stalls_total", "Camera stall counter (Frigate /api/stats).", r.stats.Stalls)
-
-	if r.shopReachable != nil {
-		gauge(&w, "werkstatt_shop_reachable", "Shop broker TCP-reachable from opus.", b(*r.shopReachable))
-	}
 
 	if r.frigateAPIDown != nil {
 		gauge(&w, "werkstatt_frigate_api_reachable", "Frigate API reachable (0 = last polls failed).", b(!*r.frigateAPIDown))

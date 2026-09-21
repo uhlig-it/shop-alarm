@@ -8,19 +8,17 @@ There is no standalone exporter: the werkstatt metrics are served by shop-alarm 
 
 | Job | Target | Produces | Owner |
 |---|---|---|---|
-| `werkstatt` | `opus:9101` (shop-alarm's `/metrics`; set `HEALTH_ADDR=:9101` on opus) | all `werkstatt-*` gauges below | shop-alarm |
-| `shop` | `shop:9103` (existing `env-sensors`, Prometheus format over Tailscale) | scrape `up` = shop machine liveness; environment values | existing |
-| `mosquitto` | `opus:<exporter-port>` (`mosquitto-exporter`, user exists in vault) | broker clients/rates | existing, verify port + metric names |
+| `werkstatt` | `opus:9101` (shop-alarm's `/metrics`) | all `werkstatt-*` gauges below; scrape job deployed on the soda VictoriaMetrics via `uhlig-it/metrics` (2026-09-21) | shop-alarm + `uhlig-it/metrics` |
+| `shop` | `shop:9103` (existing env-sensors, scraped under the `node` job) | scrape `up` = shop machine liveness; environment values | existing |
+| `mosquitto` | not scraped yet — mosquitto-exporter not deployed on opus | broker clients/rates | open |
 
-VictoriaMetrics single-node on opus (Docker); scrape interval 30 s. Grafana datasource type `victoriametrics`.
+VictoriaMetrics single-node on soda (Docker, repo `uhlig-it/metrics`); scrape interval 30 s. Grafana datasource type `victoriametrics`.
 
 ## shop-alarm collector configuration
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `HEALTH_ADDR` | `:8080` | HTTP server for `/healthz` and `/metrics` (use `:9101` on opus) |
-| `SHOP_PROBE_ADDR` | `shop:1883` | TCP liveness probe target for `werkstatt_shop_reachable`; empty disables (the probe does not rely on the bridge `$SYS` topic) |
-| `PROBE_INTERVAL` | `30s` | probe cadence |
 | `LWT_TOPICS` | *(empty)* | comma-separated MQTT subscription patterns for device LWTs (e.g. `tele/+/LWT`); empty disables `werkstatt_device_up`. The concrete pattern must be confirmed on the live broker before enabling |
 | `FRIGATE_API_URL` | *(empty)* | enables the Frigate stats poller (and snapshot attachments on notifications) |
 | `FRIGATE_CAMERA` | `werkstatt` | camera whose per-camera stats fields are exported |
@@ -30,7 +28,6 @@ VictoriaMetrics single-node on opus (Docker); scrape interval 30 s. Grafana data
 
 | Metric | Source | Meaning |
 |---|---|---|
-| `werkstatt_shop_reachable` 1/0 | TCP probe opus→`SHOP_PROBE_ADDR` | shop machine + broker reachable |
 | `werkstatt_bridge_connected` 1/0 | `$SYS/broker/connection/shop.shop/state` | bridge up (as observed by opus) |
 | `werkstatt_frigate_available` 1/0 | `frigate/available` = online | Frigate process up (LWT `offline` catches a dead Frigate) |
 | `werkstatt_camera_online` 1/0 | `frigate/werkstatt/status/detect` = online | end-to-end shop stream (Pi→mediamtx→go2rtc→Frigate) |
@@ -46,7 +43,12 @@ VictoriaMetrics single-node on opus (Docker); scrape interval 30 s. Grafana data
 
 Unknown values are omitted rather than reported as zero, so dashboard panels show "no data" (gray) instead of a false red. The optional `/api/stats` fields (`connection_quality`, `reconnects`, `stalls`) are parsed defensively (numbers or numeric strings; a dead camera reporting `"N/A"` yields nil, never a parse failure) — `STATS_FAIL_THRESHOLD` (default 3) consecutive transport-level failures flip `werkstatt_frigate_api_reachable` and feed the camera-loss rule. The env-sensors metric names (`env_temperature_celsius{topic=…}`, `env_humidity_percent`, `env_illuminance_lux`) and mosquitto-exporter names (`mosquitto_clients_connected`, `mosquitto_messages_received_total`) are assumed and to be confirmed; adjust the dashboard queries once verified.
 
-## Dashboard (importable: `werkstatt-dashboard.json`)
+## Dashboard
+
+Two formats, same contract:
+
+* **vmui** (live at `https://metrics.tailnet-204f.ts.net/vmui` → Dashboards → "Workshop alarm"): `roles/victoriametrics/files/dashboards/werkstatt-dashboard.json` in `uhlig-it/metrics` (ansible-deployed to soda; verified 2026-09-21: target up, `werkstatt_alarm_state`, `up{instance="shop:9103"}` and `werkstatt_bridge_connected` returning data).
+* **Grafana** (for a future Grafana instance): `monitoring/werkstatt-dashboard.json` in this repo (Grafana schema, `${datasource}` template variable of type `victoriametrics`).
 
 * **Row "Status at a glance"** — one stat panel per component, all green=OK, red=down, gray=pending: Shop machine (scrape `up`), MQTT bridge, Camera stream, Frigate, Detect, Recordings, Door, Devices online (count), Alarm state.
 * **Row "Shop machine"** — temperature, humidity, illuminance time series (env-sensors).

@@ -22,7 +22,6 @@ type topics struct {
 	available  string
 	events     string
 	attributes string
-	lockStatus string // compatibility alias, replaced by state
 	cmdPrefix  string // <root>/pir/# wildcard root
 	audio      string // Frigate audio wildcard
 }
@@ -82,7 +81,6 @@ func NewEngine(cfg config.Config, client mqtt.Client, core *Core, n Notifier, m 
 			available:  cfg.TopicRoot + "/alarm/available",
 			events:     cfg.TopicRoot + "/alarm/events",
 			attributes: cfg.TopicRoot + "/alarm/attributes",
-			lockStatus: cfg.TopicRoot + "/lock/status",
 			cmdPrefix:  cfg.TopicRoot,
 			audio:      cfg.FrigateAudioTopicPrefix,
 		},
@@ -242,14 +240,6 @@ func (e *Engine) StateChanged(d Data) {
 	}
 	e.Publish(e.t.state, []byte(string(d.State)), 0, true)
 
-	// Compatibility alias for the replaced mqtt-router lock/status topic.
-	alias := "disarmed"
-	switch d.State {
-	case StateArmedAway, StatePending, StateTriggered:
-		alias = "armed"
-	}
-	e.Publish(e.t.lockStatus, []byte(alias), 0, true)
-
 	e.syncTimers(time.Now())
 	e.supervision()
 	e.controlFlash(d)
@@ -285,7 +275,7 @@ func (e *Engine) Event(kind string, details map[string]string) {
 		slog.Error("event marshal failed", "error", err)
 		return
 	}
-	e.Publish(e.t.events, b, 0, false)
+	e.Publish(e.t.events, b, 1, false)
 }
 
 func (e *Engine) Attributes(a Attributes) {
@@ -603,6 +593,9 @@ func (e *Engine) strobe() {
 func (e *Engine) repeatNotify() {
 	s := e.core.Summarize()
 	if s.State != StateTriggered || !s.Flashing {
+		return
+	}
+	if e.notifier == nil {
 		return
 	}
 	e.notifier.Notify(5, "Werkstatt alarm still active", "Triggered; send ACK on werkstatt/alarm/cmnd to silence.", e.lastReviewID())

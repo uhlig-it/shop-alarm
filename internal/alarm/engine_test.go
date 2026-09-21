@@ -282,9 +282,6 @@ func TestConnectStormDebouncesProfileSet(t *testing.T) {
 	if got := client.pubsOn("werkstatt/alarm/state")[0].payload; got != "armed_away" {
 		t.Fatalf("boot state = %q, want armed_away (evidence)", got)
 	}
-	if got := client.pubsOn("werkstatt/lock/status")[0].payload; got != "armed" {
-		t.Fatalf("lock alias = %q, want armed", got)
-	}
 	if n := client.pubCount("frigate/profile/set"); n != 1 {
 		t.Fatalf("profile/set published %d times during connect storm, want 1", n)
 	}
@@ -335,7 +332,7 @@ func TestProfileMismatchNotifiesOnce(t *testing.T) {
 }
 
 // Arming through the MQTT command path exercises the full engine wiring:
-// arming -> door closed -> armed_away, published with the lock alias.
+// arming -> door closed -> armed_away.
 func TestArmCommandPublishesArmedAway(t *testing.T) {
 	e, client, _, _ := newTestEngine(t)
 	e.Start()
@@ -357,9 +354,6 @@ func TestArmCommandPublishesArmedAway(t *testing.T) {
 		pubs := client.pubsOn("werkstatt/alarm/state")
 		return pubs[len(pubs)-1].payload == "armed_away"
 	}, "armed_away publish")
-	if got := client.pubsOn("werkstatt/lock/status"); len(got) == 0 || got[len(got)-1].payload != "armed" {
-		t.Fatalf("lock alias not armed: %+v", got)
-	}
 }
 
 // Device LWT messages feed the metrics recorder (exporter fold).

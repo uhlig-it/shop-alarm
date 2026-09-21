@@ -44,6 +44,7 @@ func testCore(t *testing.T, into *recorder) (*Core, *time.Time) {
 		EntryDelay:             30 * time.Second,
 		PreArmSweep:            60 * time.Second,
 		SupervisionBridgeDelay: 5 * time.Minute,
+		FrigateCameraName:      "werkstatt",
 	}
 	now, clock := testClock(time.Date(2026, 9, 20, 20, 0, 0, 0, time.UTC))
 	c := NewCore(cfg, into, now)
@@ -302,19 +303,23 @@ func TestSupervisionCameraLoss(t *testing.T) {
 	if got := c.Snapshot().State; got != StateArmedAway {
 		t.Fatalf("state changed to %s, want armed_away", got)
 	}
-	// Fault + notify published.
+	// Fault published silently; the notification is deferred to the
+	// escalation so a flapping stream cannot spam (decision 2026-09-21).
 	if len(r.faults) == 0 || len(r.faults[len(r.faults)-1]) == 0 {
 		t.Fatal("fault not published for frigate loss")
 	}
-	if len(r.notifies) == 0 {
-		t.Fatal("no supervision notification")
+	if len(r.notifies) != 0 {
+		t.Fatalf("notified %d times before the grace period, want 0 (deferred)", len(r.notifies))
 	}
 
-	// After the grace period the loss triggers.
+	// After the grace period the loss triggers and notifies once.
 	*clock = clock.Add(31 * time.Second)
 	c.FrigateLossExpired()
 	if got := c.Snapshot().State; got != StateTriggered {
 		t.Fatalf("state = %s, want triggered after camera loss grace", got)
+	}
+	if len(r.notifies) != 1 {
+		t.Fatalf("notified %d times, want 1 (trigger notification)", len(r.notifies))
 	}
 
 	// Recovery clears the fault.
@@ -360,14 +365,17 @@ func TestCameraLossWhenFrigateGone(t *testing.T) {
 
 	c.FrigateAPIUnreachable(true)
 	c.FrigateAvailable("offline")
-	c.FrigateAvailable("offline") // second delivery: notify-once
-	if n := len(r.notifies); n != 1 {
-		t.Fatalf("notified %d times, want 1", n)
+	c.FrigateAvailable("offline") // repeated delivery: fault-once, still no notify
+	if n := len(r.notifies); n != 0 {
+		t.Fatalf("notified %d times before the grace period, want 0", n)
 	}
 	*clock = clock.Add(31 * time.Second)
 	c.FrigateLossExpired()
 	if got := c.Snapshot().State; got != StateTriggered {
 		t.Fatalf("state = %s, want triggered", got)
+	}
+	if n := len(r.notifies); n != 1 {
+		t.Fatalf("notified %d times, want 1 after escalation", n)
 	}
 
 	// API comes back: fault clears, timers disarm.
@@ -377,20 +385,30 @@ func TestCameraLossWhenFrigateGone(t *testing.T) {
 	}
 }
 
-// A live stream-process loss still triggers immediately, API healthy or not.
+// A live stream-process loss is authoritative (API health irrelevant) and
+// escalates after the grace period with exactly one notification.
 func TestStreamLossTriggersDirectly(t *testing.T) {
 	r := &recorder{}
-	c, _ := testCore(t, r)
+	c, clock := testCore(t, r)
 	armedBaseline(c)
 	c.Command(CmdArmAway)
 	c.Door(false)
 
 	c.DetectStatus(false)
-	if len(r.notifies) == 0 {
-		t.Fatal("no notification for stream loss")
+	if len(r.notifies) != 0 {
+		t.Fatalf("notified %d times before the grace period, want 0 (deferred)", len(r.notifies))
 	}
 	if len(r.faults) == 0 || len(r.faults[len(r.faults)-1]) == 0 {
 		t.Fatal("no fault for stream loss")
+	}
+
+	*clock = clock.Add(31 * time.Second)
+	c.FrigateLossExpired()
+	if got := c.Snapshot().State; got != StateTriggered {
+		t.Fatalf("state = %s, want triggered", got)
+	}
+	if len(r.notifies) != 1 {
+		t.Fatalf("notified %d times, want 1", len(r.notifies))
 	}
 }
 

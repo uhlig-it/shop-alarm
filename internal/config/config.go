@@ -74,10 +74,8 @@ type Config struct {
 	DiscoveryPrefix string
 
 	// Metrics (exporter folded into shop-alarm; see monitoring/README.md)
-	HealthAddr        string // serves /healthz and /metrics
-	FrigateCameraName string // camera whose /api/stats fields are exported
-	ShopProbeAddr     string // TCP liveness probe target ("" disables)
-	ProbeInterval     time.Duration
+	HealthAddr        string        // serves /healthz and /metrics
+	FrigateCameraName string        // camera whose /api/stats fields are exported
 	StatsInterval     time.Duration // Frigate /api/stats poll cadence
 
 	// StatsFailThreshold counts consecutive failed /api/stats polls before
@@ -118,10 +116,10 @@ func Load() (Config, error) {
 		FrigateAudioTopicPrefix:     env("FRIGATE_AUDIO_TOPIC_PREFIX", "frigate/werkstatt/audio/#"),
 
 		DoorTopic:             env("DOOR_TOPIC", root+"/door"),
-		PIRTopics:             listEnv("PIR_TOPICS"),
+		PIRTopics:             listEnvDefault("PIR_TOPICS"),
 		BridgeStateTopic:      env("BRIDGE_STATE_TOPIC", "$SYS/broker/connection/shop.shop/state"),
 		SensorAvailableTopics: listEnvDefault("SENSOR_AVAILABILITY_TOPICS", "mqtt-gpio-binary-sensor/mqtt-gpio-binary-sensor_shop/status"),
-		DeviceLWTPatterns:     listEnv("LWT_TOPICS"),
+		DeviceLWTPatterns:     listEnvDefault("LWT_TOPICS"),
 
 		LightTopic:  env("LIGHT_TOPIC", root+"/licht/hinten/cmnd"),
 		PowerTopic:  env("POWER_TOPIC", root+"/strom/cmnd"),
@@ -140,7 +138,6 @@ func Load() (Config, error) {
 		HealthAddr:      env("HEALTH_ADDR", ":8080"),
 
 		FrigateCameraName: env("FRIGATE_CAMERA", "werkstatt"),
-		ShopProbeAddr:     env("SHOP_PROBE_ADDR", "shop:1883"),
 	}
 
 	var err error
@@ -180,9 +177,6 @@ func Load() (Config, error) {
 	if cfg.MismatchNotifyInterval, err = dur("PROFILE_MISMATCH_NOTIFY_INTERVAL", 10*time.Minute); err != nil {
 		return Config{}, err
 	}
-	if cfg.ProbeInterval, err = dur("PROBE_INTERVAL", 30*time.Second); err != nil {
-		return Config{}, err
-	}
 	if cfg.StatsInterval, err = dur("STATS_INTERVAL", 30*time.Second); err != nil {
 		return Config{}, err
 	}
@@ -215,10 +209,6 @@ func intEnv(name string, def int) (int, error) {
 		return 0, fmt.Errorf("%s: %w", name, err)
 	}
 	return n, nil
-}
-
-func listEnv(name string) []string {
-	return listEnvDefault(name)
 }
 
 func listEnvDefault(name string, def ...string) []string {

@@ -453,7 +453,7 @@ func (c *Core) Pir(topic string, on bool) {
 
 // Review handles Frigate review-alert events (frigate/reviews).
 func (c *Core) Review(id, camera, severity string, objects []string) {
-	if severity != "alert" || (camera != "" && !strings.EqualFold(camera, "werkstatt")) {
+	if severity != "alert" || (camera != "" && !strings.EqualFold(camera, c.cfg.FrigateCameraName)) {
 		return
 	}
 	hasPerson := false
@@ -614,16 +614,15 @@ func (c *Core) frigateLossEvent(acts *[]func()) {
 	if !c.cameraLost() {
 		return // available-offline alone is a stale LWT, not loss
 	}
-	// Notify once per episode: repeated deliveries of the same loss signal
-	// (e.g. the retained storm at connect) must not re-notify.
+	// Publish the fault silently; the notification is deferred to the
+	// escalation (FrigateLossExpired) so a flapping stream — short blips
+	// that recover inside the grace period — can never spam (decision
+	// 2026-09-21). Fault-once per episode still holds via the fault map.
 	if _, ok := c.faults["frigate_loss"]; !ok {
 		c.setFaultLocked(acts, "frigate_loss", map[string]any{
 			"frigate_available":    c.frigateAvailable,
 			"detect_status_online": c.frigateDetectStatus != nil && *c.frigateDetectStatus,
 			"api_down":             c.frigateAPIDown != nil && *c.frigateAPIDown,
-		})
-		*acts = append(*acts, func() {
-			c.out.Notify(4, "Supervision: camera lost", "Frigate or the shop camera stream is down while armed.")
 		})
 	}
 }
@@ -632,8 +631,7 @@ func (c *Core) frigateLossEvent(acts *[]func()) {
 func (c *Core) BridgeState(up bool) {
 	c.commit(func(acts *[]func()) {
 		if c.bridgeUp != nil && *c.bridgeUp == up {
-			c.bridgeUp = &up
-			return
+			return // unchanged: no new fault, no re-notify
 		}
 		c.bridgeUp = &up
 		if up {

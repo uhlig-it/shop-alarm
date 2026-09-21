@@ -99,7 +99,6 @@ func main() {
 	// Monitoring collectors (exporter folded into shop-alarm; the scrape
 	// target is this process's /metrics endpoint).
 	ctx := context.Background()
-	recorder.StartProber(ctx, cfg.ShopProbeAddr, cfg.ProbeInterval)
 	if cfg.FrigateAPIURL != "" {
 		recorder.StartStatsPoller(ctx, metrics.StatsOptions{
 			BaseURL:       cfg.FrigateAPIURL,

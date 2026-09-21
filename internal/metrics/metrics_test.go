@@ -3,7 +3,6 @@ package metrics
 import (
 	"context"
 	"fmt"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -33,7 +32,6 @@ func TestRenderKnownValues(t *testing.T) {
 		Reconnects:        fp(2),
 		Stalls:            fp(1),
 	})
-	r.SetShopReachable(true)
 
 	out := r.Render()
 	for _, want := range []string{
@@ -53,7 +51,6 @@ func TestRenderKnownValues(t *testing.T) {
 		"werkstatt_connection_quality 97.5",
 		"werkstatt_reconnects_total 2",
 		"werkstatt_stalls_total 1",
-		"werkstatt_shop_reachable 1",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q", want)
@@ -78,7 +75,6 @@ func TestRenderUnknownOmitted(t *testing.T) {
 		"werkstatt_profile_active",
 		"werkstatt_device_up",
 		"werkstatt_camera_fps",
-		"werkstatt_shop_reachable",
 	} {
 		if strings.Contains(out, absent) {
 			t.Errorf("unknown metric %q must be omitted, got:\n%s", absent, out)
@@ -94,24 +90,6 @@ func TestNilRecorderIsSafe(t *testing.T) {
 	if r.Render() != "" {
 		t.Error("nil recorder must render empty")
 	}
-}
-
-func TestProber(t *testing.T) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = ln.Close() }()
-
-	r := NewRecorder()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	r.StartProber(ctx, ln.Addr().String(), 5*time.Millisecond)
-
-	waitFor(t, func() bool { return strings.Contains(r.Render(), "werkstatt_shop_reachable 1") }, "reachable")
-
-	_ = ln.Close()
-	waitFor(t, func() bool { return strings.Contains(r.Render(), "werkstatt_shop_reachable 0") }, "unreachable")
 }
 
 func TestStatsPoller(t *testing.T) {
