@@ -113,10 +113,13 @@
       data:
         title: "{{ title }}"
         message: "{{ message }}\n\nLive: https://eye.tailnet-204f.ts.net/#werkstatt"
-    - service: input_text.set_value
-      data:
+    - action: input_text.set_value
+      target:
         entity_id: input_text.werkstatt_alarm_last_fault
-        value: "{{ f.reason ~ '|' ~ f.since }}"
+      data:
+        # Mapping-guard: renders reason|since for real JSON payloads and a
+        # harmless "|" when the test/preview trigger has no payload_json.
+        value: "{{ (trigger.payload_json.reason if trigger.payload_json is mapping else '') ~ '|' ~ (trigger.payload_json.since if trigger.payload_json is mapping else '') }}"
 
 - id: werkstatt_alarm_fire_notify
   alias: "Werkstatt Alarm: fire/smoke push"
