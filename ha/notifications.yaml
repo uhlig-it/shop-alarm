@@ -1,0 +1,174 @@
+# HA notification automations for the workshop alarm.
+#
+# These are the primary HA-app push path from DESIGN.md ("Notifications" and
+# "Supervision Matrix"); shop-alarm itself sends the ntfy backup channel, so
+# this file must never be the only notification path.
+#
+# Install: append these entries to /opt/homeassistant/automations.yaml (or
+# paste them via Settings -> Automations). Create the two helpers (Settings ->
+# Devices -> Helpers): a toggle `input_boolean.werkstatt_alarm_muted` and a
+# text `input_text.werkstatt_alarm_last_fault`. Then replace:
+#   * target.entity_id under notify.send_message -> your notify entity (e.g.
+#     notify.iphone_15_steffen). Per-entity notify services (notify.<entity>)
+#     are gone in current HA (2026.9) - use notify.send_message + target.
+#   * <frigate-url>              -> the Frigate UI URL (= shop-alarm's LIVE_STREAM_URL)
+#
+# notify.send_message takes ONLY message and title (per the HA docs for this
+# action); the legacy extras (image, url-on-tap, interruption_level, tag) are
+# gone. The live-stream link therefore rides in the message text, and the
+# snapshot attachment lives on the ntfy backup channel (shop-alarm attaches
+# the Frigate review snapshot there).
+#
+# Entities (after the panel rename on 2026-09-22):
+#   alarm_control_panel.werkstatt   the MQTT alarm panel (was werkstatt_werkstatt)
+#
+# Fault reasons on werkstatt/alarm/fault (oldest active fault, retained JSON):
+#   preconditions (Arming refused), profile_mismatch, bridge_down,
+#   sensor_offline, frigate_loss (silent by design - only the 30 s escalation
+#   to triggered pushes; handled by the triggered automation below).
+
+- id: werkstatt_alarm_triggered_notify
+  alias: "Werkstatt Alarm: triggered push"
+  trigger:
+    - platform: state
+      entity_id: alarm_control_panel.werkstatt
+      to: triggered
+    # Repeat every 2 min while the alarm stays triggered (design: repeat until ACK/disarm).
+    - platform: time_pattern
+      minutes: "/2"
+  condition:
+    - condition: state
+      entity_id: alarm_control_panel.werkstatt
+      state: triggered
+    - condition: state
+      entity_id: input_boolean.werkstatt_alarm_muted
+      state: "off"
+  variables:
+    reason: >-
+      {%- set a = state_attr('alarm_control_panel.werkstatt', 'audio') or {} %}
+      {%- set faults = state_attr('alarm_control_panel.werkstatt', 'faults') or [] %}
+      {%- set reasons = faults | map(attribute='reason') | list %}
+      {%- if a.values() | select | list %}
+      Fire or smoke detected in the workshop.
+      {%- elif state_attr('alarm_control_panel.werkstatt', 'review_id') %}
+      Person detected in the workshop.
+      {%- elif state_attr('alarm_control_panel.werkstatt', 'door') == 'opened' %}
+      The workshop door was opened.
+      {%- elif 'bridge_down' in reasons or 'frigate_loss' in reasons %}
+      Supervision: camera or bridge loss.
+      {%- else %}
+      The workshop alarm was triggered.
+      {%- endif %}
+  action:
+    - action: notify.send_message
+      continue_on_error: true
+      target:
+        entity_id: notify.iphone_15_steffen
+      data:
+        title: "Werkstatt Alarm"
+        message: "{{ reason }}\n\nLive: https://eye.tailnet-204f.ts.net/#werkstatt"
+
+- id: werkstatt_alarm_fault_notify
+  alias: "Werkstatt Alarm: fault push"
+  trigger:
+    - platform: mqtt
+      topic: werkstatt/alarm/fault
+  condition:
+    - condition: not
+      conditions:
+        - condition: state
+          entity_id: alarm_control_panel.werkstatt
+          state: triggered
+    - condition: template
+      value_template: >-
+        {{ trigger.payload != ''
+           and trigger.payload_json is mapping
+           and trigger.payload_json.reason is defined
+           and trigger.payload_json.since is defined
+           and trigger.payload_json.reason != 'frigate_loss'
+           and trigger.payload_json.reason ~ '|' ~ trigger.payload_json.since
+               != states('input_text.werkstatt_alarm_last_fault') }}
+  variables:
+    # default({}) keeps the editor's template preview quiet (no trigger there).
+    f: "{{ trigger.payload_json | default({}) }}"
+    title: >-
+      {%- set r = f.reason | default('') %}
+      {%- if r == 'preconditions' %}Arming refused
+      {%- elif r == 'profile_mismatch' %}Werkstatt Frigate profile mismatch
+      {%- elif r == 'bridge_down' %}Supervision: shop bridge down
+      {%- elif r == 'sensor_offline' %}Supervision: sensor offline
+      {%- else %}Werkstatt Alarm fault{%- endif %}
+    message: >-
+      {%- set r = f.reason | default('') %}
+      {%- if r == 'preconditions' %}Arming refused: {{ f.details.problems | join('; ') }}
+      {%- elif r == 'profile_mismatch' %}Frigate did not follow the requested profile (detect={{ f.details.detect }}, recordings={{ f.details.recordings }}).
+      {%- elif r == 'bridge_down' %}The MQTT bridge to the shop is down while armed.
+      {%- elif r == 'sensor_offline' %}A shop-side sensor went offline: {{ f.details.topic }}.
+      {%- else %}{{ r }}{%- endif %}
+  action:
+    - action: notify.send_message
+      continue_on_error: true
+      target:
+        entity_id: notify.iphone_15_steffen
+      data:
+        title: "{{ title }}"
+        message: "{{ message }}\n\nLive: https://eye.tailnet-204f.ts.net/#werkstatt"
+    - service: input_text.set_value
+      data:
+        entity_id: input_text.werkstatt_alarm_last_fault
+        value: "{{ f.reason ~ '|' ~ f.since }}"
+
+- id: werkstatt_alarm_fire_notify
+  alias: "Werkstatt Alarm: fire/smoke push"
+  trigger:
+    - platform: mqtt
+      topic: frigate/werkstatt/audio/fire_alarm
+      payload: "ON"
+    - platform: mqtt
+      topic: frigate/werkstatt/audio/smoke_detector
+      payload: "ON"
+  condition:
+    # While armed, audio triggers the state machine straight to `triggered`,
+    # which the triggered automation pushes.
+    - condition: not
+      conditions:
+        - condition: state
+          entity_id: alarm_control_panel.werkstatt
+          state: triggered
+  action:
+    - action: notify.send_message
+      continue_on_error: true
+      target:
+        entity_id: notify.iphone_15_steffen
+      data:
+        title: "Werkstatt Fire/Smoke"
+        message: "Audio detection reports fire or smoke in the workshop.\n\nLive: https://eye.tailnet-204f.ts.net/#werkstatt"
+
+- id: werkstatt_alarm_ack_mute
+  alias: "Werkstatt Alarm: ACK silences repeats"
+  trigger:
+    - platform: mqtt
+      topic: werkstatt/alarm/cmnd
+      payload: ACK
+      id: ack
+    - platform: state
+      entity_id: alarm_control_panel.werkstatt
+      from: triggered
+      to: disarmed
+      id: disarmed
+  action:
+    - choose:
+        - conditions:
+            - condition: trigger
+              id: ack
+          sequence:
+            - service: input_boolean.turn_on
+              target:
+                entity_id: input_boolean.werkstatt_alarm_muted
+        - conditions:
+            - condition: trigger
+              id: disarmed
+          sequence:
+            - service: input_boolean.turn_off
+              target:
+                entity_id: input_boolean.werkstatt_alarm_muted

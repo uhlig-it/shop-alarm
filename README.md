@@ -50,6 +50,10 @@ STATE_FILE=/var/lib/shop-alarm/state.json HEALTH_ADDR=:9101 \
 
 `/metrics` exposes the `werkstatt-*` gauges consumed by the monitoring dashboard (alarm state, door, bridge, Frigate switches/profile, device LWTs, Frigate stats). Metric contract, dashboard and alerting rules: `monitoring/README.md`; Grafana dashboard `monitoring/werkstatt-dashboard.json` in this repo, live vmui dashboard deployed via `uhlig-it/metrics` to the VictoriaMetrics on soda.
 
+## Home Assistant
+
+The MQTT alarm control panel is registered via discovery by shop-alarm itself (no YAML needed). The HA-app notification automations (triggered push with snapshot + live-stream link, arming/supervision fault pushes, fire/smoke while disarmed, ACK mute) are drafted in `ha/notifications.yaml` — append to `/opt/homeassistant/automations.yaml` on opus; the file header lists the required helpers and placeholders. The panel was renamed to `alarm_control_panel.werkstatt` in the HA UI (2026-09-22).
+
 ## License
 
 Licensed under the EUPL-1.2 (see `LICENSE`).
