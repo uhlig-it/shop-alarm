@@ -1,8 +1,8 @@
 // Package notify implements the ntfy backup notification channel for
-// shop-alarm. It posts JSON messages to a configured ntfy URL and, when a
-// Frigate API is configured and a review id is known, attaches the review
-// snapshot as a multipart file. All failures degrade to a log line so the
-// alarm state machine never depends on notifications.
+// shop-alarm. It posts messages to a configured ntfy URL and, when a Frigate
+// API is configured and a review id is known, attaches the review snapshot as
+// a local-file upload. All failures degrade to a log line so the alarm state
+// machine never depends on notifications.
 package notify
 
 import (
@@ -11,11 +11,16 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"mime/multipart"
 	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
 	"time"
 )
+
+// maxSnapshotBytes bounds how much of a Frigate snapshot is buffered for an
+// ntfy attachment upload (ntfy.sh itself caps attachments at 2 MB).
+const maxSnapshotBytes = 10 << 20
 
 // Notifier posts to ntfy and optionally fetches Frigate review snapshots.
 type Notifier struct {
@@ -83,14 +88,27 @@ func (n *Notifier) Notify(priority int, title, message, reviewID string) {
 		req *http.Request
 		err error
 	)
+
+	// ntfy has no multipart publish API: a local-file attachment must be the
+	// PUT request body (with the message fields as headers). The previous
+	// multipart body was stored verbatim as an attachment literally named
+	// "attachment.bin" and the message/title were lost (incident 2026-09-24).
 	snapshot, snapshotErr := n.fetchSnapshot(reviewID)
+	var file []byte
 	if snapshot != nil {
-		req, err = n.multipartRequest(payload, title, snapshot)
+		file, err = io.ReadAll(io.LimitReader(snapshot, maxSnapshotBytes))
 		_ = snapshot.Close()
-	} else {
-		if snapshotErr != nil {
-			slog.Warn("snapshot unavailable, sending text-only", "error", snapshotErr)
+		if err != nil {
+			slog.Warn("snapshot read failed, sending text-only", "error", err)
+			file = nil
 		}
+	} else if snapshotErr != nil {
+		slog.Warn("snapshot unavailable, sending text-only", "error", snapshotErr)
+	}
+
+	if len(file) > 0 {
+		req, err = n.fileRequest(payload, title, file)
+	} else {
 		b, _ := json.Marshal(payload)
 		req, err = http.NewRequest(http.MethodPost, n.url, bytes.NewReader(b))
 		req.Header.Set("Content-Type", "application/json")
@@ -147,37 +165,27 @@ func (n *Notifier) fetchSnapshot(reviewID string) (io.ReadCloser, error) {
 	return resp.Body, nil
 }
 
-func (n *Notifier) multipartRequest(payload map[string]any, title string, file io.Reader) (*http.Request, error) {
-	body := &bytes.Buffer{}
-	w := multipart.NewWriter(body)
-	msg, _ := payload["message"].(string)
-	if err := w.WriteField("message", msg); err != nil {
+// fileRequest builds the ntfy publish for a message carrying a local-file
+// attachment. ntfy expects the file as the PUT body and the message fields as
+// headers (there is no multipart form API). Passing the bytes (not a stream)
+// lets net/http set Content-Length, which ntfy's attachment path expects.
+func (n *Notifier) fileRequest(payload map[string]any, title string, file []byte) (*http.Request, error) {
+	req, err := http.NewRequest(http.MethodPut, n.url, bytes.NewReader(file))
+	if err != nil {
 		return nil, err
+	}
+	// The message rides in a header, and HTTP header values cannot contain
+	// newlines: collapse whitespace (a notification with an attachment loses
+	// the paragraph breaks the text-only JSON path keeps).
+	if msg, ok := payload["message"].(string); ok {
+		req.Header.Set("X-Message", strings.Join(strings.Fields(msg), " "))
 	}
 	if title != "" {
-		if err := w.WriteField("title", title); err != nil {
-			return nil, err
-		}
+		req.Header.Set("X-Title", title)
 	}
 	if p, ok := payload["priority"].(int); ok {
-		if err := w.WriteField("priority", fmt.Sprintf("%d", p)); err != nil {
-			return nil, err
-		}
+		req.Header.Set("X-Priority", strconv.Itoa(p))
 	}
-	fw, err := w.CreateFormFile("file", "snapshot.jpg")
-	if err != nil {
-		return nil, err
-	}
-	if _, err := io.Copy(fw, file); err != nil {
-		return nil, err
-	}
-	if err := w.Close(); err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequest(http.MethodPost, n.url, body)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.Header.Set("X-Filename", "snapshot.jpg")
 	return req, nil
 }

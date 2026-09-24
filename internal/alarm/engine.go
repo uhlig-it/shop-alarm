@@ -727,13 +727,20 @@ func deviceFromLWT(topic string) string {
 }
 
 func (e *Engine) handleReview(payload string) {
+	// Frigate nests the review's object list under after.data (verified against
+	// the 0.18 MQTT docs and the live payload): {"after":{"id":…,
+	// "severity":"alert","data":{"objects":["person"],…}}}. Reading
+	// after.objects (the pre-0.14 shape) yields an empty list, so person
+	// reviews never fired the alarm (incident 2026-09-24).
 	var ev struct {
 		Type  string `json:"type"`
 		After struct {
-			ID       string   `json:"id"`
-			Camera   string   `json:"camera"`
-			Severity string   `json:"severity"`
-			Objects  []string `json:"objects"`
+			ID       string `json:"id"`
+			Camera   string `json:"camera"`
+			Severity string `json:"severity"`
+			Data     struct {
+				Objects []string `json:"objects"`
+			} `json:"data"`
 		} `json:"after"`
 	}
 	if err := json.Unmarshal([]byte(payload), &ev); err != nil {
@@ -745,7 +752,7 @@ func (e *Engine) handleReview(payload string) {
 		e.reviewID = ev.After.ID
 		e.mu.Unlock()
 	}
-	e.core.Review(ev.After.ID, ev.After.Camera, ev.After.Severity, ev.After.Objects)
+	e.core.Review(ev.After.ID, ev.After.Camera, ev.After.Severity, ev.After.Data.Objects)
 }
 
 func (e *Engine) lastReviewID() string {

@@ -144,10 +144,12 @@ func testEngineConfig(t *testing.T) config.Config {
 		BrokerURL:                   "tcp://localhost:1883",
 		ClientID:                    "shop-alarm-test",
 		FrigateProfileTopic:         "frigate/profile/set",
+		FrigateReviewsTopic:         "frigate/reviews",
 		FrigateAvailableTopic:       "frigate/available",
 		FrigateDetectStateTopic:     "frigate/werkstatt/detect/state",
 		FrigateRecordingsStateTopic: "frigate/werkstatt/recordings/state",
 		FrigateDetectStatusTopic:    "frigate/werkstatt/status/detect",
+		FrigateCameraName:           "werkstatt",
 		DoorTopic:                   "werkstatt/door",
 		BridgeStateTopic:            "$SYS/broker/connection/shop.shop/state",
 		ExitDelay:                   60 * time.Second,
@@ -435,5 +437,55 @@ func TestNewEngineWithExistingStateFile(t *testing.T) {
 	subs := client.pubsOn("werkstatt/alarm/state")
 	if len(subs) == 0 || subs[len(subs)-1].payload != "armed_away" {
 		t.Fatalf("state not re-published after restore: %+v", subs)
+	}
+}
+
+// A real Frigate 0.18 review payload nests the alerting objects under
+// after.data; the engine must read that path. Regression for the
+// 2026-09-24 incident, where parsing after.objects yielded an empty list and
+// person reviews never entered the pending/entry-delay path (and review_id
+// was never published in the attributes).
+func TestPersonReviewFromFrigatePayloadTriggers(t *testing.T) {
+	e, client, _, _ := newTestEngine(t)
+	e.Start()
+	client.deliver("frigate/available", "online")
+	client.deliver("frigate/werkstatt/detect/state", "OFF")
+	client.deliver("frigate/werkstatt/recordings/state", "OFF")
+	client.deliver("werkstatt/door", "closed")
+	client.deliver("$SYS/broker/connection/shop.shop/state", "1")
+	waitFor(t, time.Second, func() bool { return client.pubCount("frigate/profile/set") > 0 }, "bootstrap")
+
+	client.deliver("werkstatt/alarm/cmnd", "ARM_AWAY")
+	client.deliver("werkstatt/door", "closed") // close during the exit delay -> armed_away
+	waitFor(t, time.Second, func() bool {
+		pubs := client.pubsOn("werkstatt/alarm/state")
+		return len(pubs) > 0 && pubs[len(pubs)-1].payload == "armed_away"
+	}, "armed_away")
+
+	// Exactly the shape Frigate publishes on frigate/reviews (see the 0.18
+	// MQTT docs): the object list lives under after.data.
+	review := `{"type":"new","before":{},"after":{"id":"1727.1-abc","camera":"werkstatt",` +
+		`"start_time":1727.1,"end_time":null,"severity":"alert","thumb_path":"/x",` +
+		`"data":{"detections":["1727.1-abc"],"objects":["person"],"sub_labels":[],"zones":[],"audio":[]}}}`
+	client.deliver("frigate/reviews", review)
+
+	waitFor(t, time.Second, func() bool {
+		pubs := client.pubsOn("werkstatt/alarm/state")
+		return len(pubs) > 0 && pubs[len(pubs)-1].payload == "pending"
+	}, "pending after person review")
+
+	// The review id reaches the attributes (it did not before the fix).
+	var attrs struct {
+		ReviewID string `json:"review_id"`
+	}
+	attrPubs := client.pubsOn("werkstatt/alarm/attributes")
+	if len(attrPubs) == 0 {
+		t.Fatal("no attributes published")
+	}
+	if err := json.Unmarshal([]byte(attrPubs[len(attrPubs)-1].payload), &attrs); err != nil {
+		t.Fatalf("attributes not JSON: %v", err)
+	}
+	if attrs.ReviewID != "1727.1-abc" {
+		t.Fatalf("review_id = %q, want 1727.1-abc", attrs.ReviewID)
 	}
 }
