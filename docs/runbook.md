@@ -11,18 +11,27 @@ What to do once the alarm has triggered, and where to look when something seems 
 
 ## Clear the alarm state
 
-The state stays `triggered` until someone **disarms** it, and the 2-minute repeats (HA push + shop-alarm's ntfy backup) keep coming until then. There are two different actions:
+The state stays `triggered` until someone **disarms** it, and the 2-minute repeats (HA push + shop-alarm's ntfy backup) keep coming until then. Two different actions:
 
-* **`ACK`** — silences the notifications and stops the strobe (blink1 and the room lights); the state stays `triggered` and the panel stays red. Use it to stop the noise while you review. In HA it also turns `input_boolean.werkstatt_alarm_muted` on, which is what suppresses the HA repeats.
-* **`DISARM`** — resolves the episode: state → `disarmed`, notifications stop, and Frigate switches to the `disarmed` profile (detect, motion and recording off — the privacy floor). The alarm is inactive until you arm it again.
+* **Silence (`ACK`)** — stops the notifications and the strobe (blink1 and the room lights); the state stays `triggered` and the panel stays red. Use it while you review the footage. It also turns HA's `input_boolean.werkstatt_alarm_muted` on, which is what suppresses the HA repeats.
+* **Disarm** — resolves the episode: state → `disarmed`, everything stops, and Frigate switches to the `disarmed` profile (detect, motion and recording off — the privacy floor). The alarm is inactive until you arm it again.
 
-Ways to disarm:
+### Silence without disarming (`ACK`)
+
+* **In the Home Assistant app: the button `button.werkstatt_alarm_ack`, labelled "Werkstatt silence (ACK)".** It is available only while the alarm is `triggered` (greyed out otherwise), so it cannot be pressed by accident. Put it on a dashboard, or into an iOS widget/shortcut, for one-tap access.
+* From a shell: `mosquitto_pub -h <broker> -u <user> -P <pass> -t werkstatt/alarm/cmnd -m ACK`.
+* Toggling `input_boolean.werkstatt_alarm_muted` by hand only silences the HA pushes — it does **not** stop the strobe or shop-alarm's ntfy repeats. Use `ACK` for both.
+* `ACK` while the alarm is not triggered does nothing (the mute is guarded on the `triggered` state), so it cannot silence a future alarm.
+
+### Disarm
+
+If you just want everything to stop, **Disarm does that too** — the panel's Disarm button silences the notifications and the strobe *and* resolves the episode. The `ACK` button above is only for "quiet, but leave it triggered while I review".
 
 1. Home Assistant app → the `Werkstatt` alarm panel card → **Disarm** (`alarm_control_panel.werkstatt`).
 2. NFC tag at either workshop door (the tag automations call the panel's disarm).
 3. iOS shortcut **"Disarm Shop"**.
 4. Home Assistant → Developer Tools → Actions → `alarm_control_panel.disarm`, target `entity_id: alarm_control_panel.werkstatt`.
-5. From a shell with broker access: `mosquitto_pub -h <broker> -u <user> -P <pass> -t werkstatt/alarm/cmnd -m DISARM`. `ACK` is the same publish with `-m ACK`. This topic is **never retained** — a retained command would replay on every consumer restart.
+5. From a shell with broker access: `mosquitto_pub -h <broker> -u <user> -P <pass> -t werkstatt/alarm/cmnd -m DISARM`. This topic is **never retained** — a retained command would replay on every consumer restart.
 
 After disarming: review, fix whatever caused it, and re-arm when you leave (arm from the panel/NFC/iOS, or publish `ARM_AWAY`). Arming runs the 60 s exit delay and switches Frigate to the `armed` profile.
 
