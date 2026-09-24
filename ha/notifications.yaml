@@ -21,6 +21,9 @@
 #
 # Entities (after the panel rename on 2026-09-22):
 #   alarm_control_panel.werkstatt   the MQTT alarm panel (was werkstatt_werkstatt)
+#   button.werkstatt_alarm_ack      "Werkstatt silence (ACK)" — discovery by
+#     shop-alarm, available only while triggered; silences the notifications and
+#     the strobe without disarming (the panel card has only Arm away / Disarm).
 #
 # Fault reasons on werkstatt/alarm/fault (oldest active fault, retained JSON):
 #   preconditions (Arming refused), profile_mismatch, bridge_down,
@@ -164,6 +167,12 @@
         - conditions:
             - condition: trigger
               id: ack
+            # Only while actually triggered: a stray ACK (a second press, a
+            # manual mqtt.publish) must not mute the *next* alarm. shop-alarm
+            # keeps the state `triggered` on ACK, so this holds.
+            - condition: state
+              entity_id: alarm_control_panel.werkstatt
+              state: triggered
           sequence:
             - service: input_boolean.turn_on
               target:

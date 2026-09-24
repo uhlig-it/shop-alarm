@@ -253,6 +253,18 @@ func TestStartPublishesAvailabilityDiscoveryAndState(t *testing.T) {
 	if d["json_attributes_topic"] != "werkstatt/alarm/attributes" {
 		t.Fatalf("discovery attributes topic missing: %v", d)
 	}
+	// A separate button gives ACK a UI verb (HA's alarm panel has none).
+	btn := client.pubsOn("homeassistant/button/werkstatt_alarm_ack/config")
+	if len(btn) == 0 || !btn[0].retained {
+		t.Fatal("ACK button discovery not published retained")
+	}
+	var b map[string]any
+	if err := json.Unmarshal([]byte(btn[0].payload), &b); err != nil {
+		t.Fatalf("button discovery payload not JSON: %v", err)
+	}
+	if b["command_topic"] != "werkstatt/alarm/cmnd" || b["payload_press"] != "ACK" {
+		t.Fatalf("button discovery wrong: %v", b)
+	}
 	if got := client.pubsOn("werkstatt/alarm/state")[0].payload; got != "disarmed" {
 		t.Fatalf("fresh boot state = %q, want disarmed", got)
 	}

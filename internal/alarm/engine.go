@@ -763,8 +763,18 @@ func (e *Engine) lastReviewID() string {
 
 // ---- HA discovery ------------------------------------------------------
 
+// publishDiscovery registers the alarm control panel and an ACK button via
+// MQTT discovery. The panel needs a second entity for ACK: HA's MQTT alarm
+// panel has no ACK state, so its card offers only Arm away / Disarm, and
+// silencing a triggered alarm without disarming had no UI verb (2026-09-24).
 func (e *Engine) publishDiscovery() {
-	d := map[string]any{
+	device := map[string]any{
+		"identifiers":  []string{"werkstatt_alarm"},
+		"name":         "Werkstatt",
+		"manufacturer": "uhlig-it",
+		"model":        "shop-alarm",
+	}
+	panel := map[string]any{
 		"name":                  "Werkstatt",
 		"unique_id":             "werkstatt_alarm",
 		"state_topic":           e.t.state,
@@ -777,19 +787,34 @@ func (e *Engine) publishDiscovery() {
 		"payload_disarm":        CmdDisarm,
 		"supported_features":    []string{"arm_away"},
 		"qos":                   1,
-		"device": map[string]any{
-			"identifiers":  []string{"werkstatt_alarm"},
-			"name":         "Werkstatt",
-			"manufacturer": "uhlig-it",
-			"model":        "shop-alarm",
-		},
+		"device":                device,
 	}
-	b, err := json.Marshal(d)
+	// The button is only available while the alarm is triggered, so a press
+	// cannot arrive when there is nothing to silence (an ACK outside an alarm
+	// would mute the *next* one via the HA ACK automation).
+	ack := map[string]any{
+		"name":                  "Werkstatt silence (ACK)",
+		"unique_id":             "werkstatt_alarm_ack",
+		"command_topic":         e.t.cmd,
+		"payload_press":         CmdAck,
+		"availability_topic":    e.t.state,
+		"payload_available":     string(StateTriggered),
+		"payload_not_available": string(StateDisarmed),
+		"qos":                   1,
+		"icon":                  "mdi:bell-off",
+		"device":                device,
+	}
+	e.publishDiscoveryEntity("alarm_control_panel", "werkstatt_alarm", panel)
+	e.publishDiscoveryEntity("button", "werkstatt_alarm_ack", ack)
+}
+
+func (e *Engine) publishDiscoveryEntity(component, objectID string, payload map[string]any) {
+	b, err := json.Marshal(payload)
 	if err != nil {
 		slog.Error("discovery marshal failed", "error", err)
 		return
 	}
-	topic := e.cfg.DiscoveryPrefix + "/alarm_control_panel/werkstatt_alarm/config"
+	topic := e.cfg.DiscoveryPrefix + "/" + component + "/" + objectID + "/config"
 	e.Publish(topic, b, 0, true)
 	slog.Info("published HA discovery", "topic", topic)
 }
