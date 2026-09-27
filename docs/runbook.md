@@ -18,7 +18,7 @@ The state stays `triggered` until someone **disarms** it, and the 2-minute repea
 
 ### Silence without disarming (`ACK`)
 
-* **In the Home Assistant app: the button `button.werkstatt_alarm_ack`, labelled "Werkstatt silence (ACK)".** It is available only while the alarm is `triggered` (greyed out otherwise), so it cannot be pressed by accident. Put it on a dashboard, or into an iOS widget/shortcut, for one-tap access.
+* **In the Home Assistant app: the button `button.werkstatt_shop_alarm_werkstatt_silence_ack`, labelled "Werkstatt silence (ACK)".** It is available only while the alarm is `triggered` (greyed out otherwise), so it cannot be pressed by accident. Put it on a dashboard, or into an iOS widget/shortcut, for one-tap access.
 * From a shell: `mosquitto_pub -h <broker> -u <user> -P <pass> -t werkstatt/alarm/cmnd -m ACK`.
 * Toggling `input_boolean.werkstatt_alarm_muted` by hand only silences the HA pushes — it does **not** stop the strobe or shop-alarm's ntfy repeats. Use `ACK` for both.
 * `ACK` while the alarm is not triggered does nothing (the mute is guarded on the `triggered` state), so it cannot silence a future alarm.
@@ -58,9 +58,19 @@ The audit event and the ntfy text carry the source:
 
 Live state: the retained `werkstatt/alarm/attributes` has `state`, `since`, `door`, `pirs`, `audio`, active `faults` and `review_id`; the retained `werkstatt/alarm/fault` is the oldest active fault (empty when none).
 
+## The whole shop is offline (`bridge_loss`)
+
+When the shop Pi — or the whole site — goes down, the alarm trips on `bridge_loss`: the shop↔opus MQTT bridge down for ≥ 5 min while armed. This is the documented fallback. The camera usually fails first, but a crash-looping stream process can keep `frigate/<cam>/status/detect` flapping `online`, so the `camera_loss` trigger never holds for its 30 s and the bridge timer is what actually catches the outage.
+
+* Confirm it is the site, not just the Pi: on opus, `tailscale status | grep -E 'shop|pascal'`. **`shop` and `pascal` both offline = shared site infrastructure (mains or the site network); `shop` alone = the shop box.** Same rule as the reliability dashboard.
+* Once the bridge is down, the shop-side signals are untrustworthy: a retained `werkstatt/door closed` or a socket `LWT Online` is stale, not evidence.
+* Nothing is remotely power-cyclable (the plugs route through the Pi), so recovery is a site visit — `github.com/uhlig-it/shop/docs/on-site-recovery.md`.
+* The alarm is doing its job. Silence it with `ACK` while you arrange the visit, and `DISARM` only once the site is healthy (there will be no footage from the outage).
+
 ## One-place health
 
 * vmui dashboard "Workshop alarm": `https://metrics.tailnet-204f.ts.net/vmui` (alarm state, door, bridge, camera, detect/recordings, devices).
+* vmui dashboard "Shop machine reliability": `shop_health`, `up{shop:9100}` / `up{pascal:9100}`, and the mains plugs — the shop-vs-pascal rule for telling a Pi fault from a site outage.
 * shop-alarm directly: `curl http://opus:9101/metrics`.
 * Log: `ssh opus 'docker logs --since 1h shop-alarm'`.
 
