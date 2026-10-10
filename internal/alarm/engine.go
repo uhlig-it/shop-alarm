@@ -763,10 +763,12 @@ func (e *Engine) lastReviewID() string {
 
 // ---- HA discovery ------------------------------------------------------
 
-// publishDiscovery registers the alarm control panel and an ACK button via
-// MQTT discovery. The panel needs a second entity for ACK: HA's MQTT alarm
-// panel has no ACK state, so its card offers only Arm away / Disarm, and
-// silencing a triggered alarm without disarming had no UI verb (2026-09-24).
+// publishDiscovery registers the alarm control panel, an ACK button and a
+// re-arm button via MQTT discovery. The panel needs extra entities for ACK and
+// REARM: HA's MQTT alarm panel has no such state, so its card offers only Arm
+// away / Disarm, and neither silencing a triggered alarm without disarming
+// (2026-09-24) nor returning to armed without the disarm actor sequence
+// (2026-10-10) had a UI verb.
 func (e *Engine) publishDiscovery() {
 	device := map[string]any{
 		"identifiers":  []string{"werkstatt_alarm"},
@@ -804,8 +806,25 @@ func (e *Engine) publishDiscovery() {
 		"icon":                  "mdi:bell-off",
 		"device":                device,
 	}
+	// REARM resolves a triggered alarm back to armed_away in one step without
+	// running the disarm actor sequence (no lights/power/radio). Same
+	// triggered-only gating as ACK: a press cannot arrive when there is nothing
+	// to clear.
+	rearm := map[string]any{
+		"name":                  "Werkstatt re-arm (REARM)",
+		"unique_id":             "werkstatt_alarm_rearm",
+		"command_topic":         e.t.cmd,
+		"payload_press":         CmdRearm,
+		"availability_topic":    e.t.state,
+		"payload_available":     string(StateTriggered),
+		"payload_not_available": string(StateDisarmed),
+		"qos":                   1,
+		"icon":                  "mdi:shield-refresh",
+		"device":                device,
+	}
 	e.publishDiscoveryEntity("alarm_control_panel", "werkstatt_alarm", panel)
 	e.publishDiscoveryEntity("button", "werkstatt_alarm_ack", ack)
+	e.publishDiscoveryEntity("button", "werkstatt_alarm_rearm", rearm)
 }
 
 func (e *Engine) publishDiscoveryEntity(component, objectID string, payload map[string]any) {

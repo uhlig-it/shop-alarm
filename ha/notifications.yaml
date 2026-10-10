@@ -24,6 +24,9 @@
 #   button.werkstatt_alarm_ack      "Werkstatt silence (ACK)" — discovery by
 #     shop-alarm, available only while triggered; silences the notifications and
 #     the strobe without disarming (the panel card has only Arm away / Disarm).
+#   button.werkstatt_alarm_rearm    "Werkstatt re-arm (REARM)" — discovery by
+#     shop-alarm, available only while triggered; returns triggered -> armed_away
+#     in one step without the disarm actor sequence (no lights/power/radio).
 #
 # Fault reasons on werkstatt/alarm/fault (oldest active fault, retained JSON):
 #   preconditions (Arming refused), profile_mismatch, bridge_down,
@@ -151,17 +154,21 @@
         message: "Audio detection reports fire or smoke in the workshop.\n\nLive: https://eye.tailnet-204f.ts.net/#werkstatt"
 
 - id: werkstatt_alarm_ack_mute
-  alias: "Werkstatt Alarm: ACK silences repeats"
+  alias: "Werkstatt Alarm: ACK silences repeats, resolve unmutes"
   trigger:
     - platform: mqtt
       topic: werkstatt/alarm/cmnd
       payload: ACK
       id: ack
+    # Any exit from triggered re-mutes the push path: DISARM (-> disarmed) or
+    # REARM (-> armed_away).
     - platform: state
       entity_id: alarm_control_panel.werkstatt
       from: triggered
-      to: disarmed
-      id: disarmed
+      to:
+        - disarmed
+        - armed_away
+      id: resolved
   action:
     - choose:
         - conditions:
@@ -179,7 +186,7 @@
                 entity_id: input_boolean.werkstatt_alarm_muted
         - conditions:
             - condition: trigger
-              id: disarmed
+              id: resolved
           sequence:
             - service: input_boolean.turn_off
               target:

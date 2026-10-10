@@ -11,9 +11,10 @@ What to do once the alarm has triggered, and where to look when something seems 
 
 ## Clear the alarm state
 
-The state stays `triggered` until someone **disarms** it, and the 2-minute repeats (HA push + shop-alarm's ntfy backup) keep coming until then. Two different actions:
+The state stays `triggered` until someone **disarms** or **re-arms** it, and the 2-minute repeats (HA push + shop-alarm's ntfy backup) keep coming until then. Three different actions:
 
 * **Silence (`ACK`)** — stops the notifications and the strobe (blink1 and the room lights); the state stays `triggered` and the panel stays red. Use it while you review the footage. It also turns HA's `input_boolean.werkstatt_alarm_muted` on, which is what suppresses the HA repeats.
+* **Re-arm (`REARM`)** — the quiet way out of `triggered`: state → `armed_away` in one step, Frigate stays `armed`, and **no** actor sequence runs (no lights, power strip or radio). Use it for a false or supervision alarm (camera/bridge loss) when the shop should stay armed. Re-arm from the HA button labelled "Werkstatt re-arm (REARM)", or `mosquitto_pub -t werkstatt/alarm/cmnd -m REARM`.
 * **Disarm** — resolves the episode: state → `disarmed`, everything stops, and Frigate switches to the `disarmed` profile (detect, motion and recording off — the privacy floor). The alarm is inactive until you arm it again.
 
 ### Silence without disarming (`ACK`)
@@ -22,6 +23,15 @@ The state stays `triggered` until someone **disarms** it, and the 2-minute repea
 * From a shell: `mosquitto_pub -h <broker> -u <user> -P <pass> -t werkstatt/alarm/cmnd -m ACK`.
 * Toggling `input_boolean.werkstatt_alarm_muted` by hand only silences the HA pushes — it does **not** stop the strobe or shop-alarm's ntfy repeats. Use `ACK` for both.
 * `ACK` while the alarm is not triggered does nothing (the mute is guarded on the `triggered` state), so it cannot silence a future alarm.
+
+### Clear while staying armed (`REARM`)
+
+`REARM` is `DISARM` without the leaving-the-shop actor sequence: `triggered` → `armed_away` directly, so the lights, power strip and radio are untouched and Frigate stays in the `armed` profile. This is the verb for a **false or supervision alarm** — e.g. the 2026-10-10 `camera_loss` at 06:36, where the camera stream crash-looped while nobody was in the shop.
+
+* **In the Home Assistant app: the button labelled "Werkstatt re-arm (REARM)"** (discovered by shop-alarm, sitting next to the ACK button; HA assigns its entity id). Like the ACK button it is available only while the alarm is `triggered`.
+* From a shell: `mosquitto_pub -h <broker> -u <user> -P <pass> -t werkstatt/alarm/cmnd -m REARM`.
+* REARM is a no-op unless the state is exactly `triggered`, and it does **not** run the arming preconditions (door closed, PIRs quiet): it assumes the shop was armed before the alarm, so it just puts the state back. If the underlying supervision condition is still live (e.g. the camera is still down) the alarm re-trips after its grace period — re-arm once it has recovered.
+* The HA-mute helper is cleared on REARM too (same as on DISARM), so the next alarm notifies again.
 
 ### Disarm
 

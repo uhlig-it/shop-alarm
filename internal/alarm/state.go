@@ -27,12 +27,15 @@ const (
 	StateTriggered State = "triggered"
 )
 
-// Commands accepted on <root>/alarm/cmnd (payloads match the HA MQTT
-// alarm control panel configuration in DESIGN.md).
+// Commands accepted on <root>/alarm/cmnd. ARM_AWAY and DISARM match the HA
+// MQTT alarm control panel configuration in DESIGN.md; ACK and REARM are
+// shop-alarm extensions (HA's panel has no verb to silence a triggered alarm
+// or to re-arm in place).
 const (
 	CmdArmAway = "ARM_AWAY"
 	CmdDisarm  = "DISARM"
 	CmdAck     = "ACK"
+	CmdRearm   = "REARM"
 )
 
 // Fault is one active supervision or precondition problem, published
@@ -329,6 +332,9 @@ func (c *Core) Command(cmd string) {
 		case CmdAck:
 			*acts = append(*acts, func() { c.out.Event("command", map[string]string{"command": cmd}) })
 			c.ack(acts)
+		case CmdRearm:
+			*acts = append(*acts, func() { c.out.Event("command", map[string]string{"command": cmd}) })
+			c.rearm(acts)
 		default:
 			*acts = append(*acts, func() { c.out.Event("command", map[string]string{"command": cmd, "result": "unknown"}) })
 		}
@@ -405,6 +411,28 @@ func (c *Core) ack(acts *[]func()) {
 	c.setStateLocked(acts, StateTriggered)
 	*acts = append(*acts, func() { c.out.Event("ack", nil) })
 	*acts = append(*acts, func() { c.out.Flash(false) })
+}
+
+// rearm returns a triggered alarm to armed_away in one step, without the
+// disarm actor sequence (no lights, power strip or radio) — the verb for
+// clearing a false or supervision alarm while keeping the shop armed. DISARM
+// stays the verb that leaves the armed state and runs the physical actors, so
+// there is exactly one loud exit and one quiet one (2026-10-10).
+func (c *Core) rearm(acts *[]func()) {
+	if c.data.State != StateTriggered {
+		return
+	}
+	c.acked = false
+	c.data.ExitDeadline = time.Time{}
+	c.data.EscalationDeadline = time.Time{}
+	c.data.EntryDeadline = time.Time{}
+	c.data.TriggeredAt = time.Time{}
+	c.data.Flashing = false
+	*acts = append(*acts, func() { c.out.Flash(false) })
+	c.setStateLocked(acts, StateArmedAway)
+	*acts = append(*acts, func() {
+		c.out.Event("transition", map[string]string{"to": string(StateArmedAway), "source": "rearm"})
+	})
 }
 
 // Door updates the reed-contact state (opened/closed).

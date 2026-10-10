@@ -268,6 +268,50 @@ func TestAckSilencesButStaysTriggered(t *testing.T) {
 	}
 }
 
+func TestRearmReturnsToArmedAwayWithoutActors(t *testing.T) {
+	r := &recorder{}
+	c, _ := testCore(t, r)
+	armedBaseline(c)
+	c.Command(CmdArmAway)
+	c.Door(false)
+	c.Door(true)
+	c.EntryExpired()
+
+	c.Command(CmdRearm)
+	d := c.Snapshot()
+	if d.State != StateArmedAway {
+		t.Fatalf("state = %s, want armed_away", d.State)
+	}
+	if d.Flashing {
+		t.Fatal("flashing should be off after REARM")
+	}
+	if r.disarmSeq != 0 {
+		t.Fatalf("DisarmSequence ran %d times, want 0 (REARM must not touch the actors)", r.disarmSeq)
+	}
+	if HasDeadline(d.ExitDeadline) || HasDeadline(d.EscalationDeadline) || HasDeadline(d.EntryDeadline) {
+		t.Fatal("deadlines still set after REARM")
+	}
+	if HasDeadline(d.TriggeredAt) {
+		t.Fatal("TriggeredAt still set after REARM")
+	}
+}
+
+func TestRearmIgnoredUnlessTriggered(t *testing.T) {
+	r := &recorder{}
+	c, _ := testCore(t, r)
+	armedBaseline(c)
+	c.Command(CmdArmAway)
+	c.Door(false) // armed_away, not triggered
+
+	c.Command(CmdRearm)
+	if got := c.Snapshot().State; got != StateArmedAway {
+		t.Fatalf("state = %s, want armed_away (REARM must be a no-op)", got)
+	}
+	if r.disarmSeq != 0 {
+		t.Fatalf("DisarmSequence ran %d times", r.disarmSeq)
+	}
+}
+
 func TestDisarmFromAnyState(t *testing.T) {
 	r := &recorder{}
 	c, _ := testCore(t, r)

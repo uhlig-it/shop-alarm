@@ -40,7 +40,7 @@ STATE_FILE=/var/lib/shop-alarm/state.json HEALTH_ADDR=:9101 \
 
 ## MQTT contract (topics under `<TOPIC_PREFIX>`)
 
-* `<prefix>/alarm/cmnd` — `ARM_AWAY`, `DISARM`, `ACK` (never retained)
+* `<prefix>/alarm/cmnd` — `ARM_AWAY`, `DISARM`, `ACK`, `REARM` (never retained)
 * `<prefix>/alarm/state` — retained, HA vocabulary: `disarmed`, `arming`, `armed_away`, `pending`, `triggered`
 * `<prefix>/alarm/fault`, `<prefix>/alarm/attributes`, `<prefix>/alarm/available` (LWT), `<prefix>/alarm/events` (audit)
 * `frigate/profile/set` — `armed`/`disarmed` (reconciliation + switching)
@@ -52,11 +52,11 @@ STATE_FILE=/var/lib/shop-alarm/state.json HEALTH_ADDR=:9101 \
 
 ## Home Assistant
 
-The MQTT alarm control panel is registered via discovery by shop-alarm itself (no YAML needed). The HA-app notification automations (triggered push with the live-stream link, arming/supervision fault pushes, fire/smoke while disarmed, ACK mute) live in `ha/notifications.yaml` — append to `/opt/homeassistant/automations.yaml` on opus; the file header lists the required helpers and placeholders. The panel was renamed to `alarm_control_panel.werkstatt` in the HA UI (2026-09-22).
+The MQTT alarm control panel is registered via discovery by shop-alarm itself (no YAML needed), together with two chained buttons: **Werkstatt silence (ACK)** and **Werkstatt re-arm (REARM)**, both available only while the alarm is `triggered` (HA's alarm card has only Arm away / Disarm). The HA-app notification automations (triggered push with the live-stream link, arming/supervision fault pushes, fire/smoke while disarmed, ACK mute) live in `ha/notifications.yaml` — append to `/opt/homeassistant/automations.yaml` on opus; the file header lists the required helpers and placeholders. The panel was renamed to `alarm_control_panel.werkstatt` in the HA UI (2026-09-22).
 
 ## Operating the alarm
 
-* The state stays `triggered` until it is **disarmed**; `ACK` only silences the notifications and the strobe and leaves the state `triggered`. Disarm from the HA panel (`alarm_control_panel.werkstatt`), the door NFC tags, the iOS shortcut, or `mosquitto_pub -t <root>/alarm/cmnd -m DISARM`.
+* The state stays `triggered` until it is **disarmed**; `ACK` only silences the notifications and the strobe and leaves the state `triggered`; `REARM` returns it straight to `armed_away` without the disarm actor sequence (no lights/power/radio), for clearing a false or supervision alarm while the shop stays armed. Disarm from the HA panel (`alarm_control_panel.werkstatt`), the door NFC tags, the iOS shortcut, or `mosquitto_pub -t <root>/alarm/cmnd -m DISARM`.
 * Arming assumes "the door closed ⇒ you have left". Arming with the door already open, then closing it and re-opening it to step out, arms first and trips the 30 s entry delay on the way out. Arm after the door is closed, or arm and leave in one motion.
 * After disarm the alarm is inactive and Frigate returns to the `disarmed` profile (detect/motion/record off).
 

@@ -265,6 +265,18 @@ func TestStartPublishesAvailabilityDiscoveryAndState(t *testing.T) {
 	if b["command_topic"] != "werkstatt/alarm/cmnd" || b["payload_press"] != "ACK" {
 		t.Fatalf("button discovery wrong: %v", b)
 	}
+	// A second button re-arms in place without running the disarm actors.
+	rbtn := client.pubsOn("homeassistant/button/werkstatt_alarm_rearm/config")
+	if len(rbtn) == 0 || !rbtn[0].retained {
+		t.Fatal("REARM button discovery not published retained")
+	}
+	var rb map[string]any
+	if err := json.Unmarshal([]byte(rbtn[0].payload), &rb); err != nil {
+		t.Fatalf("rearm button discovery payload not JSON: %v", err)
+	}
+	if rb["command_topic"] != "werkstatt/alarm/cmnd" || rb["payload_press"] != "REARM" {
+		t.Fatalf("rearm button discovery wrong: %v", rb)
+	}
 	if got := client.pubsOn("werkstatt/alarm/state")[0].payload; got != "disarmed" {
 		t.Fatalf("fresh boot state = %q, want disarmed", got)
 	}
