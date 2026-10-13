@@ -15,7 +15,6 @@ import (
 	"github.com/uhlig-it/shop-alarm/internal/alarm"
 	"github.com/uhlig-it/shop-alarm/internal/config"
 	"github.com/uhlig-it/shop-alarm/internal/metrics"
-	"github.com/uhlig-it/shop-alarm/internal/notify"
 )
 
 var versionNumber = "0.3.0"
@@ -74,13 +73,6 @@ func main() {
 	// The handler itself only runs after a successful (re)connect.
 	recorder := metrics.NewRecorder()
 	core := alarm.NewCore(cfg, nil, nil)
-	notifier := notify.New(notify.Config{
-		NTFYURL:        cfg.NTFYURL,
-		LiveStreamURL:  cfg.LiveStreamURL,
-		FrigateAPIURL:  cfg.FrigateAPIURL,
-		FrigateAPIUser: cfg.FrigateAPIUser,
-		FrigateAPIPass: cfg.FrigateAPIPass,
-	})
 	var engine *alarm.Engine
 	opts.SetOnConnectHandler(func(_ mqtt.Client) {
 		slog.Info("connected to MQTT", "broker", cfg.BrokerURL)
@@ -88,7 +80,7 @@ func main() {
 	})
 
 	client := mqtt.NewClient(opts)
-	engine = alarm.NewEngine(cfg, client, core, notifier, recorder)
+	engine = alarm.NewEngine(cfg, client, core, recorder)
 	core.SetSink(engine)
 
 	if token := client.Connect(); token.Wait() && token.Error() != nil {

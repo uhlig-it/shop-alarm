@@ -12,7 +12,6 @@ type recorder struct {
 	states    []Data
 	faults    [][]byte
 	events    []string
-	notifies  []string
 	flashes   []bool
 	attrs     []Attributes
 	armSeq    int
@@ -25,7 +24,6 @@ func (r *recorder) StateChanged(d Data)                    { r.states = append(r
 func (r *recorder) FaultChanged(p []byte)                  { r.faults = append(r.faults, p) }
 func (r *recorder) Event(kind string, _ map[string]string) { r.events = append(r.events, kind) }
 func (r *recorder) Attributes(a Attributes)                { r.attrs = append(r.attrs, a) }
-func (r *recorder) Notify(_ int, title, _ string)          { r.notifies = append(r.notifies, title) }
 func (r *recorder) Flash(on bool)                          { r.flashes = append(r.flashes, on) }
 func (r *recorder) ArmSequence()                           { r.armSeq++ }
 func (r *recorder) DisarmSequence()                        { r.disarmSeq++ }
@@ -102,9 +100,8 @@ func TestArmExitDelayDoorOpenEscalates(t *testing.T) {
 	if !HasDeadline(c.Snapshot().EscalationDeadline) {
 		t.Fatal("escalation deadline not set")
 	}
-	want := "Werkstatt still arming"
-	if len(r.notifies) == 0 || r.notifies[len(r.notifies)-1] != want {
-		t.Fatalf("notifies = %v, want last %q", r.notifies, want)
+	if !hasEvent(r, "arming_door_open") {
+		t.Fatalf("events = %v, want arming_door_open", r.events)
 	}
 
 	*clock = clock.Add(60 * time.Second)
@@ -129,8 +126,8 @@ func TestArmPreconditionsRefuse(t *testing.T) {
 	if len(r.faults) == 0 || len(r.faults[len(r.faults)-1]) == 0 {
 		t.Fatal("fault not published")
 	}
-	if len(r.notifies) == 0 || r.notifies[len(r.notifies)-1] != "Arming refused" {
-		t.Fatalf("notifies = %v, want arming refused", r.notifies)
+	if !hasEvent(r, "arm_failed") {
+		t.Fatalf("events = %v, want arm_failed", r.events)
 	}
 }
 
@@ -207,16 +204,15 @@ func TestFireSkipsEntryDelay(t *testing.T) {
 	}
 }
 
-func TestFireWhileDisarmedNotifiesOnly(t *testing.T) {
+func TestFireWhileDisarmedEventsOnly(t *testing.T) {
 	r := &recorder{}
 	c, _ := testCore(t, r)
 	c.Audio("smoke_detector", true)
 	if got := c.Snapshot().State; got != StateDisarmed {
 		t.Fatalf("state = %s, want disarmed", got)
 	}
-	want := "Fire or smoke alarm detected"
-	if len(r.notifies) == 0 || r.notifies[len(r.notifies)-1] != want {
-		t.Fatalf("notifies = %v, want %q", r.notifies, want)
+	if !hasEvent(r, "fire_disarmed") {
+		t.Fatalf("events = %v, want fire_disarmed", r.events)
 	}
 }
 
@@ -244,6 +240,82 @@ func TestPersonReviewTriggers(t *testing.T) {
 		t.Fatalf("state = %s, want arming (unrelated review ignored)", got)
 	}
 	_ = clock
+}
+
+func lastAttrs(r *recorder) Attributes {
+	return r.attrs[len(r.attrs)-1]
+}
+
+func hasEvent(r *recorder, kind string) bool {
+	for _, e := range r.events {
+		if e == kind {
+			return true
+		}
+	}
+	return false
+}
+
+// review_id must describe the current alarm event: set by a person review and
+// kept only for the entry-delay trigger that follows it. Regression for the
+// 2026-10-13 incident, where a stale review_id from an earlier person review
+// made the HA push label a door entry-delay alarm as "Person detected".
+func TestReviewIDOnlyForPersonTriggers(t *testing.T) {
+	r := &recorder{}
+	c, _ := testCore(t, r)
+	armedBaseline(c)
+	c.Command(CmdArmAway)
+	c.Door(false)
+
+	c.Review("rev-person", "werkstatt", "alert", []string{"person"})
+	if got := lastAttrs(r).ReviewID; got != "rev-person" {
+		t.Fatalf("review_id after person review = %q, want rev-person", got)
+	}
+
+	// The person-triggered entry delay keeps the review id.
+	c.EntryExpired()
+	if got := c.Snapshot().State; got != StateTriggered {
+		t.Fatalf("state = %s, want triggered", got)
+	}
+	if got := lastAttrs(r).ReviewID; got != "rev-person" {
+		t.Fatalf("review_id after person trigger = %q, want rev-person", got)
+	}
+
+	// Re-arm clears it, so the following door alarm is not labelled a person.
+	c.Command(CmdRearm)
+	if got := lastAttrs(r).ReviewID; got != "" {
+		t.Fatalf("review_id after rearm = %q, want empty", got)
+	}
+	c.Door(true)
+	c.EntryExpired()
+	if got := c.Snapshot().State; got != StateTriggered {
+		t.Fatalf("state = %s, want triggered", got)
+	}
+	if got := lastAttrs(r).ReviewID; got != "" {
+		t.Fatalf("review_id after door trigger = %q, want empty", got)
+	}
+}
+
+// A direct non-person trigger (here: fire audio while a person review is still
+// pending) must clear review_id, so no snapshot is attached to it either.
+func TestReviewIDClearedByNonPersonTrigger(t *testing.T) {
+	r := &recorder{}
+	c, _ := testCore(t, r)
+	armedBaseline(c)
+	c.Command(CmdArmAway)
+	c.Door(false)
+
+	c.Review("rev-p", "werkstatt", "alert", []string{"person"})
+	if got := lastAttrs(r).ReviewID; got != "rev-p" {
+		t.Fatalf("review_id after person review = %q, want rev-p", got)
+	}
+
+	c.Audio("fire_alarm", true)
+	if got := c.Snapshot().State; got != StateTriggered {
+		t.Fatalf("state = %s, want triggered", got)
+	}
+	if got := lastAttrs(r).ReviewID; got != "" {
+		t.Fatalf("review_id after fire trigger = %q, want empty", got)
+	}
 }
 
 func TestAckSilencesButStaysTriggered(t *testing.T) {
@@ -347,23 +419,17 @@ func TestSupervisionCameraLoss(t *testing.T) {
 	if got := c.Snapshot().State; got != StateArmedAway {
 		t.Fatalf("state changed to %s, want armed_away", got)
 	}
-	// Fault published silently; the notification is deferred to the
-	// escalation so a flapping stream cannot spam (decision 2026-09-21).
+	// Fault published silently; the escalation is deferred so a flapping
+	// stream cannot spam (decision 2026-09-21).
 	if len(r.faults) == 0 || len(r.faults[len(r.faults)-1]) == 0 {
 		t.Fatal("fault not published for frigate loss")
 	}
-	if len(r.notifies) != 0 {
-		t.Fatalf("notified %d times before the grace period, want 0 (deferred)", len(r.notifies))
-	}
 
-	// After the grace period the loss triggers and notifies once.
+	// After the grace period the loss triggers.
 	*clock = clock.Add(31 * time.Second)
 	c.FrigateLossExpired()
 	if got := c.Snapshot().State; got != StateTriggered {
 		t.Fatalf("state = %s, want triggered after camera loss grace", got)
-	}
-	if len(r.notifies) != 1 {
-		t.Fatalf("notified %d times, want 1 (trigger notification)", len(r.notifies))
 	}
 
 	// Recovery clears the fault.
@@ -375,8 +441,8 @@ func TestSupervisionCameraLoss(t *testing.T) {
 
 // A stale retained frigate/available=offline (e.g. after a broker restart,
 // when frigate reconnects without republishing availability) must NOT
-// fault, notify or escalate while the stream and API are healthy — this is
-// the incident of 2026-09-21 (notification storm).
+// fault or escalate while the stream and API are healthy — this is
+// the incident of 2026-09-21 (event storm).
 func TestStaleAvailableOfflineIgnored(t *testing.T) {
 	r := &recorder{}
 	c, clock := testCore(t, r)
@@ -386,9 +452,6 @@ func TestStaleAvailableOfflineIgnored(t *testing.T) {
 
 	c.FrigateAvailable("offline") // retained storm delivery
 	c.FrigateAvailable("offline") // repeated delivery
-	if len(r.notifies) != 0 {
-		t.Fatalf("notified %d times, want 0 for stale availability", len(r.notifies))
-	}
 	if len(r.faults) > 0 && len(r.faults[len(r.faults)-1]) > 0 {
 		t.Fatal("fault published for stale availability")
 	}
@@ -409,17 +472,11 @@ func TestCameraLossWhenFrigateGone(t *testing.T) {
 
 	c.FrigateAPIUnreachable(true)
 	c.FrigateAvailable("offline")
-	c.FrigateAvailable("offline") // repeated delivery: fault-once, still no notify
-	if n := len(r.notifies); n != 0 {
-		t.Fatalf("notified %d times before the grace period, want 0", n)
-	}
+	c.FrigateAvailable("offline") // repeated delivery: still a single fault
 	*clock = clock.Add(31 * time.Second)
 	c.FrigateLossExpired()
 	if got := c.Snapshot().State; got != StateTriggered {
 		t.Fatalf("state = %s, want triggered", got)
-	}
-	if n := len(r.notifies); n != 1 {
-		t.Fatalf("notified %d times, want 1 after escalation", n)
 	}
 
 	// API comes back: fault clears, timers disarm.
@@ -430,7 +487,7 @@ func TestCameraLossWhenFrigateGone(t *testing.T) {
 }
 
 // A live stream-process loss is authoritative (API health irrelevant) and
-// escalates after the grace period with exactly one notification.
+// escalates after the grace period.
 func TestStreamLossTriggersDirectly(t *testing.T) {
 	r := &recorder{}
 	c, clock := testCore(t, r)
@@ -439,9 +496,6 @@ func TestStreamLossTriggersDirectly(t *testing.T) {
 	c.Door(false)
 
 	c.DetectStatus(false)
-	if len(r.notifies) != 0 {
-		t.Fatalf("notified %d times before the grace period, want 0 (deferred)", len(r.notifies))
-	}
 	if len(r.faults) == 0 || len(r.faults[len(r.faults)-1]) == 0 {
 		t.Fatal("no fault for stream loss")
 	}
@@ -450,9 +504,6 @@ func TestStreamLossTriggersDirectly(t *testing.T) {
 	c.FrigateLossExpired()
 	if got := c.Snapshot().State; got != StateTriggered {
 		t.Fatalf("state = %s, want triggered", got)
-	}
-	if len(r.notifies) != 1 {
-		t.Fatalf("notified %d times, want 1", len(r.notifies))
 	}
 }
 
@@ -491,11 +542,12 @@ func TestSupervisionBridge(t *testing.T) {
 		t.Fatalf("state = %s, want triggered after bridge grace", got)
 	}
 
-	// While disarmed the bridge loss is a log-only event.
+	// DISARM resolves the episode; the already-known bridge loss causes no
+	// further fault change and no push.
 	c.Command(CmdDisarm)
 	c.BridgeState(false)
-	if len(r.notifies) != 2 { // arm-time bridge fault + the triggered notification
-		t.Fatalf("got %d notifications, want 2 (disarmed bridge loss silent)", len(r.notifies))
+	if got := c.Snapshot().State; got != StateDisarmed {
+		t.Fatalf("state = %s, want disarmed", got)
 	}
 }
 
@@ -512,11 +564,8 @@ func TestSensorOfflineRequiresBridgeUp(t *testing.T) {
 	if len(r.faults) == 0 || len(r.faults[len(r.faults)-1]) == 0 {
 		t.Fatal("expected no new fault while the bridge is down")
 	}
-	if len(r.notifies) != 1 {
-		t.Fatalf("got %d notifications, want 1", len(r.notifies))
-	}
 
-	// Bridge back up + sensor offline -> fault and notify.
+	// Bridge back up + sensor offline -> fault.
 	c.BridgeState(true)
 	c.SensorAvailable("mqtt-gpio-binary-sensor/mqtt-gpio-binary-sensor_shop/status", false)
 	if len(r.faults) == 0 || len(r.faults[len(r.faults)-1]) == 0 {

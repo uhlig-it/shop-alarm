@@ -6,7 +6,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /shop-alarm .
 
-# Distroless static: CA certificates included (ntfy/Frigate over TLS).
+# Distroless static: CA certificates included (outbound TLS).
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /shop-alarm /shop-alarm
 EXPOSE 9101

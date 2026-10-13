@@ -1,23 +1,28 @@
 # HA notification automations for the workshop alarm.
 #
-# These are the primary HA-app push path from DESIGN.md ("Notifications" and
-# "Supervision Matrix"); shop-alarm itself sends the ntfy backup channel, so
-# this file must never be the only notification path.
+# Home Assistant is the ONLY notification channel: shop-alarm no longer sends
+# notifications itself (the ntfy backup was retired 2026-10-13) — it only
+# publishes state, fault, attributes and audit events on MQTT. Keep these
+# automations correct; if they break, no alert is delivered.
 #
 # Install: append these entries to /opt/homeassistant/automations.yaml (or
 # paste them via Settings -> Automations). Create the two helpers (Settings ->
 # Devices -> Helpers): a toggle `input_boolean.werkstatt_alarm_muted` and a
 # text `input_text.werkstatt_alarm_last_fault`. Then replace:
-#   * target.entity_id under notify.send_message -> your notify entity (e.g.
-#     notify.iphone_15_steffen). Per-entity notify services (notify.<entity>)
-#     are gone in current HA (2026.9) - use notify.send_message + target.
-#   * <frigate-url>              -> the Frigate UI URL (= shop-alarm's LIVE_STREAM_URL)
+#   * notify.mobile_app_iphone_15_pro_steffen -> the critical-alert target phone
+#     (the companion-app `notify.mobile_app_<device>` service; see below)
+#   * notify.iphone_15_steffen -> the notify entity for the routine pushes
+#   * <frigate-url>             -> the Frigate UI URL (https://eye.tailnet-204f.ts.net)
 #
-# notify.send_message takes ONLY message and title (per the HA docs for this
-# action); the legacy extras (image, url-on-tap, interruption_level, tag) are
-# gone. The live-stream link therefore rides in the message text, and the
-# snapshot attachment lives on the ntfy backup channel (shop-alarm attaches
-# the Frigate review snapshot there).
+# Two delivery mechanisms are used on purpose:
+#   * `notify.mobile_app_<device>` (service) + `data.push.sound.critical: 1` for
+#     the alarm-triggered push — a critical alert bypasses the iPhone's silent
+#     switch / Do Not Disturb. This is the same pattern as
+#     packages/smoke_detection.yaml, which owns the fire/smoke push (the
+#     mic-node detector, not frigate/*/audio/*); do not duplicate it here.
+#   * `notify.send_message` (notify entity) for the routine pushes. It takes
+#     only `title` + `message` — the legacy extras (image, url-on-tap,
+#     interruption_level, tag) are gone in current HA (2026.9).
 #
 # Entities (after the panel rename on 2026-09-22):
 #   alarm_control_panel.werkstatt   the MQTT alarm panel (was werkstatt_werkstatt)
@@ -50,15 +55,20 @@
       entity_id: input_boolean.werkstatt_alarm_muted
       state: "off"
   variables:
+    # `trigger` (the alarm event source) is published by shop-alarm and is the
+    # authoritative label; review_id is set only for a person detection and
+    # cleared for every other trigger, so a door alarm is never labelled a
+    # person (incident 2026-10-13).
     reason: >-
       {%- set a = state_attr('alarm_control_panel.werkstatt', 'audio') or {} %}
       {%- set faults = state_attr('alarm_control_panel.werkstatt', 'faults') or [] %}
       {%- set reasons = faults | map(attribute='reason') | list %}
+      {%- set t = state_attr('alarm_control_panel.werkstatt', 'trigger') %}
       {%- if a.values() | select | list %}
       Fire or smoke detected in the workshop.
       {%- elif state_attr('alarm_control_panel.werkstatt', 'review_id') %}
       Person detected in the workshop.
-      {%- elif state_attr('alarm_control_panel.werkstatt', 'door') == 'opened' %}
+      {%- elif t == 'entry_delay' or t == 'door_open' %}
       The workshop door was opened.
       {%- elif 'bridge_down' in reasons or 'frigate_loss' in reasons %}
       Supervision: camera or bridge loss.
@@ -66,13 +76,41 @@
       The workshop alarm was triggered.
       {%- endif %}
   action:
+    - action: notify.mobile_app_iphone_15_pro_steffen
+      continue_on_error: true
+      data:
+        title: "Werkstatt Alarm"
+        message: "{{ reason }}\n\nLive: https://eye.tailnet-204f.ts.net/#werkstatt"
+        data:
+          push:
+            sound:
+              name: default
+              critical: 1
+              volume: 1.0
+          tag: werkstatt-alarm
+          group: werkstatt-alarm
+
+- id: werkstatt_alarm_still_arming_notify
+  alias: "Werkstatt Alarm: still arming push"
+  trigger:
+    - platform: mqtt
+      topic: werkstatt/alarm/events
+  condition:
+    - condition: template
+      value_template: "{{ trigger.payload_json.type | default('') == 'arming_door_open' }}"
+  action:
     - action: notify.send_message
       continue_on_error: true
       target:
         entity_id: notify.iphone_15_steffen
       data:
         title: "Werkstatt Alarm"
-        message: "{{ reason }}\n\nLive: https://eye.tailnet-204f.ts.net/#werkstatt"
+        message: >-
+          Still arming: the door is open (or its state is unknown). Arming
+          continues, and the alarm triggers if the door is still open after the
+          escalation grace.
+
+          Live: https://eye.tailnet-204f.ts.net/#werkstatt
 
 - id: werkstatt_alarm_fault_notify
   alias: "Werkstatt Alarm: fault push"
@@ -126,32 +164,6 @@
         # Mapping-guard: renders reason|since for real JSON payloads and a
         # harmless "|" when the test/preview trigger has no payload_json.
         value: "{{ (trigger.payload_json.reason if trigger.payload_json is mapping else '') ~ '|' ~ (trigger.payload_json.since if trigger.payload_json is mapping else '') }}"
-
-- id: werkstatt_alarm_fire_notify
-  alias: "Werkstatt Alarm: fire/smoke push"
-  trigger:
-    - platform: mqtt
-      topic: frigate/werkstatt/audio/fire_alarm
-      payload: "ON"
-    - platform: mqtt
-      topic: frigate/werkstatt/audio/smoke_detector
-      payload: "ON"
-  condition:
-    # While armed, audio triggers the state machine straight to `triggered`,
-    # which the triggered automation pushes.
-    - condition: not
-      conditions:
-        - condition: state
-          entity_id: alarm_control_panel.werkstatt
-          state: triggered
-  action:
-    - action: notify.send_message
-      continue_on_error: true
-      target:
-        entity_id: notify.iphone_15_steffen
-      data:
-        title: "Werkstatt Fire/Smoke"
-        message: "Audio detection reports fire or smoke in the workshop.\n\nLive: https://eye.tailnet-204f.ts.net/#werkstatt"
 
 - id: werkstatt_alarm_ack_mute
   alias: "Werkstatt Alarm: ACK silences repeats, resolve unmutes"

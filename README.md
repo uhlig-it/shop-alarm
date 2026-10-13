@@ -29,13 +29,10 @@ STATE_FILE=/var/lib/shop-alarm/state.json HEALTH_ADDR=:9101 \
 | `SUPERVISION_BRIDGE_DELAY` | `5m` | bridge loss while armed → triggered |
 | `RECONCILE_DELAY` | `2s` | retained-state settle before reconcile |
 | `VERIFY_INITIAL_DELAY`, `VERIFY_RETRY_DELAY` | `2s`, `5s` | Frigate profile verification cadence |
-| `PROFILE_MISMATCH_NOTIFY_INTERVAL` | `10m` | notification rate limit for switch-state mismatches |
 | `LWT_TOPICS` | *(empty)* | device LWT subscription patterns for `werkstatt_device_up` (e.g. `tele/+/LWT`) |
-| `FRIGATE_API_URL`, `FRIGATE_API_USER`, `FRIGATE_API_PASSWORD` | *(empty)* | Frigate API (snapshots, `/api/stats`) |
+| `FRIGATE_API_URL`, `FRIGATE_API_USER`, `FRIGATE_API_PASSWORD` | *(empty)* | Frigate API (`/api/stats`) |
 | `FRIGATE_CAMERA` | `werkstatt` | camera name for the stats fields |
 | `STATS_INTERVAL` | `30s` | stats poll cadence |
-| `NTFY_URL` | *(empty)* | ntfy backup channel |
-| `LIVE_STREAM_URL` | *(empty)* | appended to notifications |
 | `DISCOVERY_PREFIX` | `homeassistant` | HA discovery prefix |
 
 ## MQTT contract (topics under `<TOPIC_PREFIX>`)
@@ -52,7 +49,7 @@ STATE_FILE=/var/lib/shop-alarm/state.json HEALTH_ADDR=:9101 \
 
 ## Home Assistant
 
-The MQTT alarm control panel is registered via discovery by shop-alarm itself (no YAML needed), together with two chained buttons: **Werkstatt silence (ACK)** and **Werkstatt re-arm (REARM)**, both available only while the alarm is `triggered` (HA's alarm card has only Arm away / Disarm). The HA-app notification automations (triggered push with the live-stream link, arming/supervision fault pushes, fire/smoke while disarmed, ACK mute) live in `ha/notifications.yaml` — append to `/opt/homeassistant/automations.yaml` on opus; the file header lists the required helpers and placeholders. The panel was renamed to `alarm_control_panel.werkstatt` in the HA UI (2026-09-22).
+The MQTT alarm control panel is registered via discovery by shop-alarm itself (no YAML needed), together with two chained buttons: **Werkstatt silence (ACK)** and **Werkstatt re-arm (REARM)**, both available only while the alarm is `triggered` (HA's alarm card has only Arm away / Disarm). Notifications are Home Assistant's job: shop-alarm publishes state, fault, attributes (`state`, `since`, `door`, `pirs`, `audio`, `faults`, `profile`, `review_id`, `trigger`) and audit events, and the HA-app automations turn them into pushes — the alarm-triggered push is a *critical* alert (bypasses the iPhone's silent switch / DND). They live in `ha/notifications.yaml` — append to `/opt/homeassistant/automations.yaml` on opus; the file header lists the required helpers and targets. The fire/smoke push is owned by `packages/smoke_detection.yaml`. The panel was renamed to `alarm_control_panel.werkstatt` in the HA UI (2026-09-22).
 
 ## Operating the alarm
 

@@ -59,7 +59,7 @@ type Data struct {
 	EscalationDeadline time.Time `json:"escalation_deadline,omitempty"`
 	// EntryDeadline: pending -> triggered.
 	EntryDeadline time.Time `json:"entry_deadline,omitempty"`
-	// Flashing: triggered strobe/notification loop active (stopped by ACK).
+	// Flashing: triggered strobe loop active (stopped by ACK).
 	Flashing bool `json:"flashing,omitempty"`
 }
 
@@ -74,6 +74,11 @@ type Attributes struct {
 	Faults   []Fault         `json:"faults,omitempty"`
 	Profile  string          `json:"profile,omitempty"`
 	ReviewID string          `json:"review_id,omitempty"`
+	// Trigger is the source of the current triggered episode (entry_delay,
+	// door_open, camera_loss, bridge_loss, fire); empty unless triggered. It is
+	// published so Home Assistant can label the push: a door entry_delay cannot
+	// be told from the other attributes once the door has closed again.
+	Trigger string `json:"trigger,omitempty"`
 }
 
 // Sink receives the side effects of state transitions. Implementations must
@@ -89,10 +94,7 @@ type Sink interface {
 	Event(kind string, details map[string]string)
 	// Attributes publishes the retained attributes JSON.
 	Attributes(a Attributes)
-	// Notify pushes a notification (ntfy backup channel; HA reacts to state).
-	// priority follows the ntfy scale (1..5).
-	Notify(priority int, title, message string)
-	// Flash starts (on) or stops the triggered strobe and repeat loop.
+	// Flash starts (on) or stops the triggered strobe.
 	Flash(on bool)
 	// ArmSequence executes the physical arm commands and arms Frigate.
 	ArmSequence()
@@ -128,6 +130,14 @@ type Core struct {
 	sensorOnline        map[string]bool
 	audioOn             map[string]bool
 	lastReviewID        string
+	// triggerSource is the source of the current triggered episode ("" when
+	// not triggered); published in the attributes so HA can label the push.
+	triggerSource string
+	// pendingPerson records whether the current pending episode was started by
+	// a person review (as opposed to the door or a PIR). Only then does the
+	// following entry-delay trigger keep lastReviewID; every other trigger
+	// clears it so review_id always describes the current alarm event.
+	pendingPerson bool
 
 	faults map[string]Fault
 	acked  bool
@@ -279,6 +289,7 @@ func (c *Core) attributesLocked() Attributes {
 		Since:    c.data.Updated,
 		Profile:  c.desiredProfile(),
 		ReviewID: c.lastReviewID,
+		Trigger:  c.triggerSource,
 		PIRs:     map[string]bool{},
 		Audio:    map[string]bool{},
 		Faults:   make([]Fault, 0, len(c.faults)),
@@ -373,12 +384,13 @@ func (c *Core) arm(acts *[]func()) {
 	if len(problems) > 0 {
 		joined := strings.Join(problems, "; ")
 		c.setFaultLocked(acts, "preconditions", map[string]any{"problems": problems})
-		*acts = append(*acts, func() { c.out.Notify(4, "Arming refused", joined) })
 		*acts = append(*acts, func() { c.out.Event("arm_failed", map[string]string{"reason": joined}) })
 		return
 	}
 
 	c.clearFaultLocked(acts, "preconditions")
+	c.lastReviewID = ""
+	c.triggerSource = ""
 	c.setStateLocked(acts, StateArming)
 	c.data.ExitDeadline = now.Add(c.cfg.ExitDelay)
 	c.data.EscalationDeadline = time.Time{}
@@ -391,6 +403,8 @@ func (c *Core) arm(acts *[]func()) {
 
 func (c *Core) disarm(acts *[]func(), source string) {
 	c.acked = false
+	c.lastReviewID = ""
+	c.triggerSource = ""
 	c.clearFaultLocked(acts, "preconditions")
 	c.data.ExitDeadline = time.Time{}
 	c.data.EscalationDeadline = time.Time{}
@@ -423,6 +437,8 @@ func (c *Core) rearm(acts *[]func()) {
 		return
 	}
 	c.acked = false
+	c.lastReviewID = ""
+	c.triggerSource = ""
 	c.data.ExitDeadline = time.Time{}
 	c.data.EscalationDeadline = time.Time{}
 	c.data.EntryDeadline = time.Time{}
@@ -495,12 +511,14 @@ func (c *Core) Review(id, camera, severity string, objects []string) {
 		return
 	}
 	c.commit(func(acts *[]func()) {
-		c.lastReviewID = id
-		*acts = append(*acts, c.attributesAct())
 		switch c.data.State {
 		case StateArmedAway:
+			c.lastReviewID = id
+			*acts = append(*acts, c.attributesAct())
 			c.enterPending(acts, "person")
 		case StatePending:
+			c.lastReviewID = id
+			*acts = append(*acts, c.attributesAct())
 			*acts = append(*acts, func() { c.out.Event("trigger", map[string]string{"source": "person", "skipped": "pending"}) })
 		}
 	})
@@ -524,14 +542,12 @@ func (c *Core) Audio(label string, on bool) {
 			c.trigger(acts, "fire")
 		case StateDisarmed:
 			*acts = append(*acts, func() { c.out.Event("fire_disarmed", map[string]string{"label": label}) })
-			*acts = append(*acts, func() {
-				c.out.Notify(5, "Fire or smoke alarm detected", "Audio detection reports "+label+" in the workshop.")
-			})
 		}
 	})
 }
 
 func (c *Core) enterPending(acts *[]func(), source string) {
+	c.pendingPerson = source == "person"
 	c.data.EntryDeadline = c.now().Add(c.cfg.EntryDelay)
 	delay := c.cfg.EntryDelay
 	c.setStateLocked(acts, StatePending)
@@ -539,13 +555,22 @@ func (c *Core) enterPending(acts *[]func(), source string) {
 }
 
 func (c *Core) trigger(acts *[]func(), source string) {
+	// review_id marks the alarm event as a person detection. A person review
+	// sets it before entering pending; every other trigger clears it, so
+	// review_id always describes the actual event
+	// (2026-10-13: a door entry-delay alarm was pushed as "Person detected"
+	// because a stale review_id from 2026-10-10 survived).
+	if source != "entry_delay" || !c.pendingPerson {
+		c.lastReviewID = ""
+	}
+	c.pendingPerson = false
+	c.triggerSource = source
 	c.data.EntryDeadline = time.Time{}
 	c.data.Flashing = true
 	c.setStateLocked(acts, StateTriggered)
 	c.data.TriggeredAt = c.data.Updated
 	*acts = append(*acts, func() { c.out.Event("trigger", map[string]string{"source": source}) })
 	*acts = append(*acts, func() { c.out.Flash(true) })
-	*acts = append(*acts, func() { c.out.Notify(5, "Werkstatt alarm triggered", "Source: "+source) })
 }
 
 // ExitExpired fires the exit-delay deadline.
@@ -563,15 +588,12 @@ func (c *Core) ExitExpired() {
 			return
 		}
 		// Door still open (or unknown, e.g. the bridge is down): keep arming,
-		// notify, and escalate to triggered after the agreed grace period.
+		// emit arming_door_open, and escalate to triggered after the grace period.
 		c.data.ExitDeadline = time.Time{}
 		c.data.EscalationDeadline = c.now().Add(c.cfg.DoorEscalation)
 		delay := c.cfg.DoorEscalation
 		c.setStateLocked(acts, StateArming)
 		*acts = append(*acts, func() { c.out.Event("arming_door_open", map[string]string{"escalation_delay": delay.String()}) })
-		*acts = append(*acts, func() {
-			c.out.Notify(3, "Werkstatt still arming", "The door is still open (or its state is unknown). Arming continues.")
-		})
 	})
 }
 
@@ -642,7 +664,7 @@ func (c *Core) frigateLossEvent(acts *[]func()) {
 	if !c.cameraLost() {
 		return // available-offline alone is a stale LWT, not loss
 	}
-	// Publish the fault silently; the notification is deferred to the
+	// Publish the fault silently; the trigger is deferred to the
 	// escalation (FrigateLossExpired) so a flapping stream — short blips
 	// that recover inside the grace period — can never spam (decision
 	// 2026-09-21). Fault-once per episode still holds via the fault map.
@@ -659,7 +681,7 @@ func (c *Core) frigateLossEvent(acts *[]func()) {
 func (c *Core) BridgeState(up bool) {
 	c.commit(func(acts *[]func()) {
 		if c.bridgeUp != nil && *c.bridgeUp == up {
-			return // unchanged: no new fault, no re-notify
+			return // unchanged: no new fault, no re-publish
 		}
 		c.bridgeUp = &up
 		if up {
@@ -669,9 +691,6 @@ func (c *Core) BridgeState(up bool) {
 		if c.armedish() {
 			c.setFaultLocked(acts, "bridge_down", nil)
 			*acts = append(*acts, func() { c.out.Event("supervision", map[string]string{"signal": "bridge", "value": "0"}) })
-			*acts = append(*acts, func() {
-				c.out.Notify(4, "Supervision: shop bridge down", "The MQTT bridge to the shop is down while armed.")
-			})
 		}
 	})
 }
@@ -692,9 +711,6 @@ func (c *Core) SensorAvailable(topic string, online bool) {
 		c.setFaultLocked(acts, "sensor_offline", map[string]any{"topic": topic})
 		*acts = append(*acts, func() {
 			c.out.Event("supervision", map[string]string{"signal": "sensor_lwt", "topic": topic, "value": "offline"})
-		})
-		*acts = append(*acts, func() {
-			c.out.Notify(4, "Supervision: sensor offline", "A shop-side sensor (door/PIR) lost its LWT while armed.")
 		})
 	})
 }

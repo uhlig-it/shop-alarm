@@ -52,20 +52,16 @@ type Config struct {
 	EntryDelay             time.Duration // trigger -> triggered
 	SupervisionCameraDelay time.Duration // frigate loss while armed -> triggered
 	SupervisionBridgeDelay time.Duration // bridge loss while armed -> triggered
-	TriggerRepeat          time.Duration // notification repeat while triggered
 	FlashInterval          time.Duration // blink cadence while triggered
 	PreArmSweep            time.Duration // PIR trip window that blocks arming
 	ReconcileDelay         time.Duration // wait for retained state before reconciling
 	VerifyInitialDelay     time.Duration // profile publish -> first switch-state check
 	VerifyRetryDelay       time.Duration // retry cadence before faulting
-	MismatchNotifyInterval time.Duration // minimum spacing between profile_mismatch notifications
 
 	// Persistence
 	StateFile string
 
-	// Notifications
-	NTFYURL        string
-	LiveStreamURL  string
+	// Frigate API (metrics stats poller)
 	FrigateAPIURL  string
 	FrigateAPIUser string
 	FrigateAPIPass string
@@ -128,8 +124,6 @@ func Load() (Config, error) {
 
 		StateFile: env("STATE_FILE", "/var/lib/shop-alarm/state.json"),
 
-		NTFYURL:        os.Getenv("NTFY_URL"),
-		LiveStreamURL:  os.Getenv("LIVE_STREAM_URL"),
 		FrigateAPIURL:  os.Getenv("FRIGATE_API_URL"),
 		FrigateAPIUser: os.Getenv("FRIGATE_API_USER"),
 		FrigateAPIPass: os.Getenv("FRIGATE_API_PASSWORD"),
@@ -156,9 +150,6 @@ func Load() (Config, error) {
 	if cfg.SupervisionBridgeDelay, err = dur("SUPERVISION_BRIDGE_DELAY", 5*time.Minute); err != nil {
 		return Config{}, err
 	}
-	if cfg.TriggerRepeat, err = dur("TRIGGER_REPEAT", 2*time.Minute); err != nil {
-		return Config{}, err
-	}
 	if cfg.FlashInterval, err = dur("FLASH_INTERVAL", 2*time.Second); err != nil {
 		return Config{}, err
 	}
@@ -172,9 +163,6 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	if cfg.VerifyRetryDelay, err = dur("VERIFY_RETRY_DELAY", 5*time.Second); err != nil {
-		return Config{}, err
-	}
-	if cfg.MismatchNotifyInterval, err = dur("PROFILE_MISMATCH_NOTIFY_INTERVAL", 10*time.Minute); err != nil {
 		return Config{}, err
 	}
 	if cfg.StatsInterval, err = dur("STATS_INTERVAL", 30*time.Second); err != nil {

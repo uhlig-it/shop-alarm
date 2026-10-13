@@ -5,13 +5,13 @@ What to do once the alarm has triggered, and where to look when something seems 
 ## Review the event
 
 * Frigate UI — Videos → Review (and the Events/History view): `https://eye.tailnet-204f.ts.net`. Reachable from the phone over the tailnet; this is the link the HA push carries.
-* The ntfy backup message carries `LIVE_STREAM_URL` instead (`http://shop:8888/cam/`, the shop-side mediamtx URL — LAN/tailnet only).
+* The shop-side live stream (mediamtx) is `http://shop:8888/cam/` — LAN/tailnet only; handy when the tailnet path to Frigate is slow.
 * API forensics: `curl 'http://opus:5000/api/events?limit=20'` or `curl 'http://opus:5000/api/events?label=person&limit=20'` (label, camera, `start_time`/`end_time`, `data.max_severity`). The `/api/reviews` endpoint 404s on the deployed 0.18 (`Camera not found`) — use `/api/events` and the UI.
 * The audit stream `werkstatt/alarm/events` (not retained) carries every command, transition, trigger, fault and ACK as JSON. Subscribe to it **before** reproducing a problem: `mosquitto_sub -t 'werkstatt/alarm/events' -v`.
 
 ## Clear the alarm state
 
-The state stays `triggered` until someone **disarms** or **re-arms** it, and the 2-minute repeats (HA push + shop-alarm's ntfy backup) keep coming until then. Three different actions:
+The state stays `triggered` until someone **disarms** or **re-arms** it, and the 2-minute HA pushes keep coming until then. Three different actions:
 
 * **Silence (`ACK`)** — stops the notifications and the strobe (blink1 and the room lights); the state stays `triggered` and the panel stays red. Use it while you review the footage. It also turns HA's `input_boolean.werkstatt_alarm_muted` on, which is what suppresses the HA repeats.
 * **Re-arm (`REARM`)** — the quiet way out of `triggered`: state → `armed_away` in one step, Frigate stays `armed`, and **no** actor sequence runs (no lights, power strip or radio). Use it for a false or supervision alarm (camera/bridge loss) when the shop should stay armed. Re-arm from the HA button labelled "Werkstatt re-arm (REARM)", or `mosquitto_pub -t werkstatt/alarm/cmnd -m REARM`.
@@ -21,7 +21,7 @@ The state stays `triggered` until someone **disarms** or **re-arms** it, and the
 
 * **In the Home Assistant app: the button `button.werkstatt_shop_alarm_werkstatt_silence_ack`, labelled "Werkstatt silence (ACK)".** It is available only while the alarm is `triggered` (greyed out otherwise), so it cannot be pressed by accident. Put it on a dashboard, or into an iOS widget/shortcut, for one-tap access.
 * From a shell: `mosquitto_pub -h <broker> -u <user> -P <pass> -t werkstatt/alarm/cmnd -m ACK`.
-* Toggling `input_boolean.werkstatt_alarm_muted` by hand only silences the HA pushes — it does **not** stop the strobe or shop-alarm's ntfy repeats. Use `ACK` for both.
+* Toggling `input_boolean.werkstatt_alarm_muted` by hand only silences the HA pushes — it does **not** stop the strobe. Use `ACK` for both.
 * `ACK` while the alarm is not triggered does nothing (the mute is guarded on the `triggered` state), so it cannot silence a future alarm.
 
 ### Clear while staying armed (`REARM`)
@@ -58,7 +58,7 @@ So arm **after** the door is closed, or arm and leave in one motion (arm → ope
 
 ## Which trigger was it?
 
-The audit event and the ntfy text carry the source:
+The audit event (`werkstatt/alarm/events`) carries the source, and the HA push labels it from the `trigger` attribute:
 
 * `entry_delay` — a `pending` ran out; the `pending` came from the door opening (or a person review, once person detection is armed) while `armed_away`.
 * `door_open` — arming with the door still open past the exit delay **and** the extra escalation grace (120 s total).

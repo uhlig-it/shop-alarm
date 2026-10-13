@@ -26,23 +26,16 @@ type topics struct {
 	audio      string // Frigate audio wildcard
 }
 
-// Notifier is the notification sink used by the engine (implemented by
-// notify.Notifier; tests record the calls).
-type Notifier interface {
-	Notify(priority int, title, message, reviewID string)
-}
-
 // Engine wires the alarm Core to MQTT: subscriptions, retained publishes,
-// deadline scheduling, Frigate profile verification and the flash/repeat
-// loops. It implements alarm.Sink.
+// deadline scheduling, Frigate profile verification and the flash loop. It
+// implements alarm.Sink.
 type Engine struct {
 	cfg config.Config
 	t   topics
 
-	client   mqtt.Client
-	core     *Core
-	notifier Notifier
-	metrics  *metrics.Recorder
+	client  mqtt.Client
+	core    *Core
+	metrics *metrics.Recorder
 
 	mu               sync.Mutex
 	timers           map[string]*time.Timer
@@ -52,28 +45,24 @@ type Engine struct {
 	verifyAttempt    int
 	verifyTimer      *time.Timer
 	lastProfilePub   string // desired profile of the in-flight/last verification
-	mismatchLastNtfy time.Time
 	flashTicker      *time.Ticker
-	repeatTicker     *time.Ticker
 	flashOn          bool
 	flashRed         bool
 	stateInitialized bool
 	ready            bool // machine effects allowed (after bootstrap)
 	stateFileExists  bool
 	profileState     string
-	reviewID         string
 	lastState        State
 }
 
 // NewEngine builds the engine; an existing state file is loaded up front.
-func NewEngine(cfg config.Config, client mqtt.Client, core *Core, n Notifier, m *metrics.Recorder) *Engine {
+func NewEngine(cfg config.Config, client mqtt.Client, core *Core, m *metrics.Recorder) *Engine {
 	e := &Engine{
-		cfg:      cfg,
-		client:   client,
-		core:     core,
-		notifier: n,
-		metrics:  m,
-		timers:   make(map[string]*time.Timer),
+		cfg:     cfg,
+		client:  client,
+		core:    core,
+		metrics: m,
+		timers:  make(map[string]*time.Timer),
 		t: topics{
 			state:      cfg.TopicRoot + "/alarm/state",
 			cmd:        cfg.TopicRoot + "/alarm/cmnd",
@@ -290,13 +279,6 @@ func (e *Engine) Attributes(a Attributes) {
 	e.Publish(e.t.attributes, b, 0, true)
 }
 
-func (e *Engine) Notify(priority int, title, message string) {
-	if !e.isReady() || e.notifier == nil {
-		return
-	}
-	e.notifier.Notify(priority, title, message, e.lastReviewID())
-}
-
 func (e *Engine) Flash(on bool) {
 	if !e.isReady() {
 		return
@@ -402,10 +384,9 @@ func (e *Engine) verifyStep() {
 	}
 	if attempt >= 1 {
 		// Fault in both directions: recordings on while disarmed is the
-		// privacy regression this check exists for. The notification is
-		// sent once per fault episode (and at most every
-		// MismatchNotifyInterval) so a stuck state cannot spam.
-		newlyFaulted := !e.core.HasFault("profile_mismatch")
+		// privacy regression this check exists for. The profile_mismatch fault
+		// is published (and cleared on recovery); Home Assistant turns it into
+		// the operator push and dedups repeats via the fault's `since`.
 		e.core.SetFault("profile_mismatch", map[string]any{
 			"expected":   profileName(desired),
 			"detect":     detect,
@@ -416,31 +397,11 @@ func (e *Engine) verifyStep() {
 			"detect":   fmt.Sprintf("%v", detect),
 			"record":   fmt.Sprintf("%v", record),
 		})
-		e.mu.Lock()
-		lastNotify := e.mismatchLastNtfy
-		e.mu.Unlock()
-		if newlyFaulted || time.Since(lastNotify) >= e.cfg.MismatchNotifyInterval {
-			e.mu.Lock()
-			e.mismatchLastNtfy = time.Now()
-			e.mu.Unlock()
-			e.CoreNotifyFault(detect, record)
-		}
 		return
 	}
 	// Retry once: re-publish and check again shortly.
 	e.Publish(e.cfg.FrigateProfileTopic, []byte(profileName(desired)), 1, false)
 	e.scheduleVerifyCheck(e.cfg.VerifyRetryDelay)
-}
-
-// CoreNotifyFault notifies about a profile mismatch (kept out of the core
-// because the verification lives in the engine).
-func (e *Engine) CoreNotifyFault(detect, record bool) {
-	if e.notifier == nil {
-		return
-	}
-	e.notifier.Notify(4, "Werkstatt Frigate profile mismatch",
-		fmt.Sprintf("Frigate did not follow the requested profile (detect=%v, recordings=%v).", detect, record),
-		e.lastReviewID())
 }
 
 func (e *Engine) verifyAttemptReset() {
@@ -551,14 +512,6 @@ func (e *Engine) startFlashLocked() {
 			}
 		}()
 	}
-	if e.cfg.TriggerRepeat > 0 {
-		e.repeatTicker = time.NewTicker(e.cfg.TriggerRepeat)
-		go func() {
-			for range e.repeatTicker.C {
-				e.repeatNotify()
-			}
-		}()
-	}
 }
 
 func (e *Engine) stopFlashLocked() {
@@ -570,10 +523,6 @@ func (e *Engine) stopFlashLocked() {
 	if e.flashTicker != nil {
 		e.flashTicker.Stop()
 		e.flashTicker = nil
-	}
-	if e.repeatTicker != nil {
-		e.repeatTicker.Stop()
-		e.repeatTicker = nil
 	}
 	e.Publish(e.cfg.Blink1Topic, []byte(`{"color":{"r":0,"g":0,"b":0}}`), 0, false)
 	e.Publish(e.cfg.LightTopic, []byte("off"), 0, false)
@@ -588,17 +537,6 @@ func (e *Engine) strobe() {
 		e.Publish(e.cfg.LightTopic, []byte("off"), 0, false)
 	}
 	e.flashRed = !e.flashRed
-}
-
-func (e *Engine) repeatNotify() {
-	s := e.core.Summarize()
-	if s.State != StateTriggered || !s.Flashing {
-		return
-	}
-	if e.notifier == nil {
-		return
-	}
-	e.notifier.Notify(5, "Werkstatt alarm still active", "Triggered; send ACK on werkstatt/alarm/cmnd to silence.", e.lastReviewID())
 }
 
 // ---- message handling --------------------------------------------------
@@ -747,18 +685,7 @@ func (e *Engine) handleReview(payload string) {
 		slog.Warn("unparsable Frigate review", "error", err)
 		return
 	}
-	if ev.After.ID != "" {
-		e.mu.Lock()
-		e.reviewID = ev.After.ID
-		e.mu.Unlock()
-	}
 	e.core.Review(ev.After.ID, ev.After.Camera, ev.After.Severity, ev.After.Data.Objects)
-}
-
-func (e *Engine) lastReviewID() string {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	return e.reviewID
 }
 
 // ---- HA discovery ------------------------------------------------------

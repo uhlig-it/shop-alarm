@@ -111,30 +111,6 @@ func (c *fakeClient) pubsOn(topic string) []fakePub {
 
 func (c *fakeClient) pubCount(topic string) int { return len(c.pubsOn(topic)) }
 
-// recordingNotifier captures engine notifications.
-type recordingNotifier struct {
-	mu    sync.Mutex
-	times []string
-}
-
-func (n *recordingNotifier) Notify(_ int, title, _, _ string) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	n.times = append(n.times, title)
-}
-
-func (n *recordingNotifier) count(title string) int {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	c := 0
-	for _, t := range n.times {
-		if t == title {
-			c++
-		}
-	}
-	return c
-}
-
 // ---- helpers --------------------------------------------------------------
 
 func testEngineConfig(t *testing.T) config.Config {
@@ -159,22 +135,32 @@ func testEngineConfig(t *testing.T) config.Config {
 		ReconcileDelay:              10 * time.Millisecond,
 		VerifyInitialDelay:          5 * time.Millisecond,
 		VerifyRetryDelay:            5 * time.Millisecond,
-		MismatchNotifyInterval:      time.Hour,
 		DiscoveryPrefix:             "homeassistant",
 	}
 }
 
-func newTestEngine(t *testing.T) (*Engine, *fakeClient, *recordingNotifier, *metrics.Recorder) {
+func newTestEngine(t *testing.T) (*Engine, *fakeClient, *metrics.Recorder) {
 	t.Helper()
 	cfg := testEngineConfig(t)
 	cfg.StateFile = t.TempDir() + "/state.json" // never exists -> fresh bootstrap
 	client := newFakeClient()
-	notifier := &recordingNotifier{}
 	rec := metrics.NewRecorder()
 	core := NewCore(cfg, nil, nil)
-	e := NewEngine(cfg, client, core, notifier, rec)
+	e := NewEngine(cfg, client, core, rec)
 	core.SetSink(e)
-	return e, client, notifier, rec
+	return e, client, rec
+}
+
+// lastFaultPayload returns the last non-empty payload published on the fault
+// topic (the oldest active fault JSON).
+func lastFaultPayload(c *fakeClient) string {
+	var out string
+	for _, p := range c.pubsOn("werkstatt/alarm/fault") {
+		if p.payload != "" {
+			out = p.payload
+		}
+	}
+	return out
 }
 
 func waitFor(t *testing.T, timeout time.Duration, cond func() bool, msg string) {
@@ -226,7 +212,7 @@ func TestDeviceFromLWT(t *testing.T) {
 }
 
 func TestStartPublishesAvailabilityDiscoveryAndState(t *testing.T) {
-	e, client, _, _ := newTestEngine(t)
+	e, client, _ := newTestEngine(t)
 	e.Start()
 
 	// Fresh boot, no armed evidence: bootstrap -> disarmed. Waiting for the
@@ -286,7 +272,7 @@ func TestStartPublishesAvailabilityDiscoveryAndState(t *testing.T) {
 // publish; repeated reconciliation triggers while a verification is in
 // flight are debounced (smoke-test finding 1, fixed).
 func TestConnectStormDebouncesProfileSet(t *testing.T) {
-	e, client, _, _ := newTestEngine(t)
+	e, client, _ := newTestEngine(t)
 	e.cfg.VerifyInitialDelay = 200 * time.Millisecond // keep the verify in flight
 	e.Start()
 
@@ -323,10 +309,12 @@ func TestConnectStormDebouncesProfileSet(t *testing.T) {
 	}
 }
 
-// A profile mismatch faults and notifies once, not on every verify cycle
-// (smoke-test finding 2, fixed: fault both directions, notify once).
-func TestProfileMismatchNotifiesOnce(t *testing.T) {
-	e, client, notifier, _ := newTestEngine(t)
+// A profile mismatch faults once and does not re-fault on every verify cycle
+// (smoke-test finding 2, fixed: fault both directions, fault once). Home
+// Assistant turns the retained fault into the operator push and dedups repeats
+// via the fault's stable `since`.
+func TestProfileMismatchFaultsOnce(t *testing.T) {
+	e, client, _ := newTestEngine(t)
 	e.Start()
 
 	// Disarmed boot, clean switch states (detect/recordings OFF).
@@ -342,25 +330,25 @@ func TestProfileMismatchNotifiesOnce(t *testing.T) {
 	// verification in flight so the mismatch is detected.
 	e.VerifyProfile()
 	client.deliver("frigate/werkstatt/recordings/state", "ON")
-	waitFor(t, time.Second, func() bool {
-		return notifier.count("Werkstatt Frigate profile mismatch") == 1
-	}, "first mismatch notification")
+	waitFor(t, time.Second, func() bool { return e.core.HasFault("profile_mismatch") }, "profile_mismatch fault")
+	first := lastFaultPayload(client)
 
-	// Further verify cycles must not repeat the notification.
+	// Further verify cycles must not re-fault: the payload (including `since`)
+	// stays identical, so HA does not push again.
 	e.VerifyProfile()
 	e.verifyStep()
-	if n := notifier.count("Werkstatt Frigate profile mismatch"); n != 1 {
-		t.Fatalf("mismatch notified %d times, want 1", n)
-	}
 	if !e.core.HasFault("profile_mismatch") {
-		t.Fatal("profile_mismatch fault not set")
+		t.Fatal("profile_mismatch fault cleared unexpectedly")
+	}
+	if got := lastFaultPayload(client); got != first {
+		t.Fatalf("fault payload changed across verify cycles:\n first=%s\n last=%s", first, got)
 	}
 }
 
 // Arming through the MQTT command path exercises the full engine wiring:
 // arming -> door closed -> armed_away.
 func TestArmCommandPublishesArmedAway(t *testing.T) {
-	e, client, _, _ := newTestEngine(t)
+	e, client, _ := newTestEngine(t)
 	e.Start()
 	client.deliver("frigate/available", "online")
 	client.deliver("frigate/werkstatt/detect/state", "OFF")
@@ -390,7 +378,7 @@ func TestDeviceLWTUpdatesMetrics(t *testing.T) {
 	client := newFakeClient()
 	rec := metrics.NewRecorder()
 	core := NewCore(cfg, nil, nil)
-	e := NewEngine(cfg, client, core, &recordingNotifier{}, rec)
+	e := NewEngine(cfg, client, core, rec)
 	core.SetSink(e)
 	e.Start()
 
@@ -408,7 +396,7 @@ func TestDeviceLWTUpdatesMetrics(t *testing.T) {
 
 // Metrics reflect the MQTT-derived state (exporter fold).
 func TestMetricsReflectAlarmState(t *testing.T) {
-	e, client, _, rec := newTestEngine(t)
+	e, client, rec := newTestEngine(t)
 	e.Start()
 	client.deliver("frigate/available", "online")
 	client.deliver("frigate/werkstatt/detect/state", "ON")
@@ -452,7 +440,7 @@ func TestNewEngineWithExistingStateFile(t *testing.T) {
 	client := newFakeClient()
 	rec := metrics.NewRecorder()
 	core := NewCore(cfg, nil, nil)
-	e := NewEngine(cfg, client, core, &recordingNotifier{}, rec) // must not panic
+	e := NewEngine(cfg, client, core, rec) // must not panic
 	core.SetSink(e)
 	e.Start()
 
@@ -470,7 +458,7 @@ func TestNewEngineWithExistingStateFile(t *testing.T) {
 // person reviews never entered the pending/entry-delay path (and review_id
 // was never published in the attributes).
 func TestPersonReviewFromFrigatePayloadTriggers(t *testing.T) {
-	e, client, _, _ := newTestEngine(t)
+	e, client, _ := newTestEngine(t)
 	e.Start()
 	client.deliver("frigate/available", "online")
 	client.deliver("frigate/werkstatt/detect/state", "OFF")
