@@ -74,7 +74,7 @@ When the shop Pi — or the whole site — goes down, the alarm trips on `bridge
 
 * Confirm it is the site, not just the Pi: on opus, `tailscale status | grep -E 'shop|pascal'`. **`shop` and `pascal` both offline = shared site infrastructure (mains or the site network); `shop` alone = the shop box.** Same rule as the reliability dashboard.
 * Once the bridge is down, the shop-side signals are untrustworthy: a retained `werkstatt/door closed` or a socket `LWT Online` is stale, not evidence.
-* Nothing is remotely power-cyclable (the plugs route through the Pi), so recovery is a site visit — `github.com/uhlig-it/shop/docs/on-site-recovery.md`.
+* Nothing is remotely power-cyclable (the plugs route through the Pi), so recovery is a site visit — `github.com/uhlig-it/infrastructure/blob/main/docs/on-site-recovery.md`.
 * The alarm is doing its job. Silence it with `ACK` while you arrange the visit, and `DISARM` only once the site is healthy (there will be no footage from the outage).
 
 ## One-place health
