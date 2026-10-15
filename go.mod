@@ -1,6 +1,6 @@
 module github.com/uhlig-it/shop-alarm
 
-go 1.27.0
+go 1.27.2
 
 tool (
 	github.com/securego/gosec/v2/cmd/gosec
