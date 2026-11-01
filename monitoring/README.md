@@ -8,11 +8,11 @@ There is no standalone exporter: the werkstatt metrics are served by shop-alarm 
 
 | Job | Target | Produces | Owner |
 |---|---|---|---|
-| `werkstatt` | `opus:9101` (shop-alarm's `/metrics`) | all `werkstatt-*` gauges below; scrape job deployed on the soda VictoriaMetrics via `uhlig-it/metrics` (2026-09-21) | shop-alarm + `uhlig-it/metrics` |
+| `werkstatt` | `opus:9101` (shop-alarm's `/metrics`) | all `werkstatt-*` gauges below; scrape job deployed by `uhlig-it/infrastructure` (`roles/victoriametrics`, 2026-09-21) | shop-alarm + `uhlig-it/infrastructure` |
 | `shop` | `shop:9103` (existing env-sensors, scraped under the `node` job) | scrape `up` = shop machine liveness; environment values | existing |
 | `mosquitto` | not scraped yet — mosquitto-exporter not deployed on opus | broker clients/rates | open |
 
-VictoriaMetrics single-node on soda (Docker, repo `uhlig-it/metrics`); scrape interval 30 s. Grafana datasource type `victoriametrics`.
+VictoriaMetrics single-node on soda, managed by `uhlig-it/infrastructure` (`roles/victoriametrics`); scrape interval 30 s. Grafana datasource type `victoriametrics`.
 
 ## shop-alarm collector configuration
 
@@ -47,7 +47,7 @@ Unknown values are omitted rather than reported as zero, so dashboard panels sho
 
 Two formats, same contract:
 
-* **vmui** (live at `https://metrics.tailnet-204f.ts.net/vmui` → Dashboards → "Workshop alarm"): `roles/victoriametrics/files/dashboards/werkstatt-dashboard.json` in `uhlig-it/metrics` (ansible-deployed to soda; verified 2026-09-21: target up, `werkstatt_alarm_state`, `up{instance="shop:9103"}` and `werkstatt_bridge_connected` returning data).
+* **vmui** (live at `https://metrics.tailnet-204f.ts.net/vmui` → Dashboards → "Workshop alarm"): `monitoring/vmui-werkstatt-dashboard.json` in this repo, installed by the shop-alarm play in `uhlig-it/infrastructure` (verified 2026-09-21: target up, `werkstatt_alarm_state`, `up{instance="shop:9103"}` and `werkstatt_bridge_connected` returning data).
 * **Grafana** (for a future Grafana instance): `monitoring/werkstatt-dashboard.json` in this repo (Grafana schema, `${datasource}` template variable of type `victoriametrics`).
 
 * **Row "Status at a glance"** — one stat panel per component, all green=OK, red=down, gray=pending: Shop machine (scrape `up`), MQTT bridge, Camera stream, Frigate, Detect, Recordings, Door, Devices online (count), Alarm state.

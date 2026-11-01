@@ -1,0 +1,277 @@
+# [[ ansible_managed ]]
+#
+# Workshop alarm (shop-alarm) Home Assistant config: the notification
+# automations and the two helpers they use. The alarm panel itself is
+# registered by shop-alarm through MQTT discovery; this package only turns its
+# state/fault topics into pushes and keeps the ACK bookkeeping.
+#
+# Deployed by the shop-alarm play in uhlig-it/infrastructure, which renders the
+# bracketed placeholders and installs the result as
+# /opt/homeassistant/packages/shop_alarm.yaml. The deployment values live in
+# inventory/host_vars/opus/main.yml. Keep this file package-shaped so a manual
+# install stays possible (replace the placeholders by hand).
+#
+# Home Assistant is the ONLY notification channel: shop-alarm no longer sends
+# notifications itself (the ntfy backup was retired 2026-10-13) — it only
+# publishes state, fault, attributes and audit events on MQTT. Keep these
+# automations correct; if they break, no alert is delivered.
+#
+# Managed here, not in the UI: moving the automations out of the UI-managed
+# automations.yaml keeps the alarm logic with the app that owns the contract,
+# and the package survives an HA rebuild.
+#
+# Two delivery mechanisms are used on purpose:
+#   * `notify.mobile_app_<device>` (service) + `data.push.sound.critical: 1` for
+#     the alarm-triggered push — a critical alert bypasses the iPhone's silent
+#     switch / Do Not Disturb. The fire/smoke push is owned by the mic node's
+#     own package; do not duplicate it here.
+#   * `notify.send_message` (notify entity) for the routine pushes. It takes
+#     only `title` + `message` — the legacy extras (image, url-on-tap,
+#     interruption_level, tag) are gone in current HA (2026.9).
+#
+# Entities (after the panel rename on 2026-09-22):
+#   alarm_control_panel.werkstatt   the MQTT alarm panel (was werkstatt_werkstatt)
+#   button.werkstatt_alarm_ack      "Werkstatt silence (ACK)" — discovery by
+#     shop-alarm, available only while triggered; silences the notifications and
+#     the strobe without disarming (the panel card has only Arm away / Disarm).
+#   button.werkstatt_alarm_rearm    "Werkstatt re-arm (REARM)" — discovery by
+#     shop-alarm, available only while triggered; returns triggered -> armed_away
+#     in one step without the disarm actor sequence (no lights/power/radio).
+#
+# Fault reasons on werkstatt/alarm/fault (oldest active fault, retained JSON):
+#   preconditions (Arming refused), profile_mismatch, bridge_down,
+#   sensor_offline, frigate_loss (silent by design - only the 30 s escalation
+#   to triggered pushes; handled by the triggered automation below).
+#
+# Deployment values (rendered by the infra play):
+#   [[ shop_alarm_ha_critical_notify_service ]]  critical push service
+#   [[ shop_alarm_ha_routine_notify_entity ]]    routine push entity
+#   [[ shop_alarm_ha_frigate_url ]]              Frigate UI base URL
+#   [[ shop_alarm_ha_nfc_outside_tag_id ]]       outside tag (disarm)
+#   [[ shop_alarm_ha_nfc_inside_tag_id ]]        inside tag (arm away)
+input_boolean:
+  werkstatt_alarm_muted:
+    name: Werkstatt Alarm Muted
+
+input_text:
+  werkstatt_alarm_last_fault:
+    name: Werkstatt Alarm Last Fault
+
+automation:
+  - id: werkstatt_alarm_triggered_notify
+    alias: "Werkstatt Alarm: triggered push"
+    trigger:
+      - platform: state
+        entity_id: alarm_control_panel.werkstatt
+        to: triggered
+      # Repeat every 2 min while the alarm stays triggered (design: repeat until ACK/disarm).
+      - platform: time_pattern
+        minutes: "/2"
+    condition:
+      - condition: state
+        entity_id: alarm_control_panel.werkstatt
+        state: triggered
+      - condition: state
+        entity_id: input_boolean.werkstatt_alarm_muted
+        state: "off"
+    variables:
+      # `trigger` (the alarm event source) is published by shop-alarm and is the
+      # authoritative label; review_id is set only for a person detection and
+      # cleared for every other trigger, so a door alarm is never labelled a
+      # person (incident 2026-10-13).
+      reason: >-
+        {%- set a = state_attr('alarm_control_panel.werkstatt', 'audio') or {} %}
+        {%- set faults = state_attr('alarm_control_panel.werkstatt', 'faults') or [] %}
+        {%- set reasons = faults | map(attribute='reason') | list %}
+        {%- set t = state_attr('alarm_control_panel.werkstatt', 'trigger') %}
+        {%- if a.values() | select | list %}
+        Fire or smoke detected in the workshop.
+        {%- elif state_attr('alarm_control_panel.werkstatt', 'review_id') %}
+        Person detected in the workshop.
+        {%- elif t == 'entry_delay' or t == 'door_open' %}
+        The workshop door was opened.
+        {%- elif 'bridge_down' in reasons or 'frigate_loss' in reasons %}
+        Supervision: camera or bridge loss.
+        {%- else %}
+        The workshop alarm was triggered.
+        {%- endif %}
+    action:
+      - action: [[ shop_alarm_ha_critical_notify_service ]]
+        continue_on_error: true
+        data:
+          title: "Werkstatt Alarm"
+          message: "{{ reason }}\n\nLive: [[ shop_alarm_ha_frigate_url ]]/#werkstatt"
+          data:
+            push:
+              sound:
+                name: default
+                critical: 1
+                volume: 1.0
+            tag: werkstatt-alarm
+            group: werkstatt-alarm
+
+  - id: werkstatt_alarm_still_arming_notify
+    alias: "Werkstatt Alarm: still arming push"
+    trigger:
+      - platform: mqtt
+        topic: werkstatt/alarm/events
+    condition:
+      - condition: template
+        value_template: "{{ trigger.payload_json.type | default('') == 'arming_door_open' }}"
+    action:
+      - action: notify.send_message
+        continue_on_error: true
+        target:
+          entity_id: [[ shop_alarm_ha_routine_notify_entity ]]
+        data:
+          title: "Werkstatt Alarm"
+          message: >-
+            Still arming: the door is open (or its state is unknown). Arming
+            continues, and the alarm triggers if the door is still open after
+            the escalation grace.
+
+            Live: [[ shop_alarm_ha_frigate_url ]]/#werkstatt
+
+  - id: werkstatt_alarm_fault_notify
+    alias: "Werkstatt Alarm: fault push"
+    trigger:
+      - platform: mqtt
+        topic: werkstatt/alarm/fault
+    condition:
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: alarm_control_panel.werkstatt
+            state: triggered
+      - condition: template
+        value_template: >-
+          {{ trigger.payload != ''
+             and trigger.payload_json is mapping
+             and trigger.payload_json.reason is defined
+             and trigger.payload_json.since is defined
+             and trigger.payload_json.reason != 'frigate_loss'
+             and trigger.payload_json.reason ~ '|' ~ trigger.payload_json.since
+                 != states('input_text.werkstatt_alarm_last_fault') }}
+    variables:
+      # default({}) keeps the editor's template preview quiet (no trigger there).
+      f: "{{ trigger.payload_json | default({}) }}"
+      title: >-
+        {%- set r = f.reason | default('') %}
+        {%- if r == 'preconditions' %}Arming refused
+        {%- elif r == 'profile_mismatch' %}Werkstatt Frigate profile mismatch
+        {%- elif r == 'bridge_down' %}Supervision: shop bridge down
+        {%- elif r == 'sensor_offline' %}Supervision: sensor offline
+        {%- else %}Werkstatt Alarm fault{%- endif %}
+      message: >-
+        {%- set r = f.reason | default('') %}
+        {%- if r == 'preconditions' %}Arming refused: {{ f.details.problems | join('; ') }}
+        {%- elif r == 'profile_mismatch' %}Frigate did not follow the requested profile (detect={{ f.details.detect }}, recordings={{ f.details.recordings }}).
+        {%- elif r == 'bridge_down' %}The MQTT bridge to the shop is down while armed.
+        {%- elif r == 'sensor_offline' %}A shop-side sensor went offline: {{ f.details.topic }}.
+        {%- else %}{{ r }}{%- endif %}
+    action:
+      - action: notify.send_message
+        continue_on_error: true
+        target:
+          entity_id: [[ shop_alarm_ha_routine_notify_entity ]]
+        data:
+          title: "{{ title }}"
+          message: "{{ message }}\n\nLive: [[ shop_alarm_ha_frigate_url ]]/#werkstatt"
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.werkstatt_alarm_last_fault
+        data:
+          # Mapping-guard: renders reason|since for real JSON payloads and a
+          # harmless "|" when the test/preview trigger has no payload_json.
+          value: "{{ (trigger.payload_json.reason if trigger.payload_json is mapping else '') ~ '|' ~ (trigger.payload_json.since if trigger.payload_json is mapping else '') }}"
+
+  - id: werkstatt_alarm_ack_mute
+    alias: "Werkstatt Alarm: ACK silences repeats, resolve unmutes"
+    trigger:
+      - platform: mqtt
+        topic: werkstatt/alarm/cmnd
+        payload: ACK
+        id: ack
+      # Any exit from triggered re-mutes the push path: DISARM (-> disarmed) or
+      # REARM (-> armed_away).
+      - platform: state
+        entity_id: alarm_control_panel.werkstatt
+        from: triggered
+        to:
+          - disarmed
+          - armed_away
+        id: resolved
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: ack
+              # Only while actually triggered: a stray ACK (a second press, a
+              # manual mqtt.publish) must not mute the *next* alarm. shop-alarm
+              # keeps the state `triggered` on ACK, so this holds.
+              - condition: state
+                entity_id: alarm_control_panel.werkstatt
+                state: triggered
+            sequence:
+              - service: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.werkstatt_alarm_muted
+          - conditions:
+              - condition: trigger
+                id: resolved
+            sequence:
+              - service: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.werkstatt_alarm_muted
+
+  # NFC tags: a tag is only a trigger; the scan is delivered by an
+  # authenticated Home Assistant Companion app, so a copied tag on a phone that
+  # is not signed in to HA does nothing. To make the outside tag work only with
+  # one phone, uncomment `device_id:` below and paste the id from the
+  # `tag_scanned` event (Developer Tools -> Events).
+  #
+  # Outside tag -> disarm; inside tag -> arm away. Both drive the same MQTT
+  # alarm panel as the HA app, the dashboard and Siri, so the arming
+  # preconditions, the exit/entry delays and the shop-alarm audit events are
+  # unchanged.
+  - id: werkstatt_nfc_outside_disarm
+    alias: "Werkstatt Alarm: outside NFC tag disarms"
+    mode: single
+    max_exceeded: silent
+    trigger:
+      - platform: tag
+        tag_id: "[[ shop_alarm_ha_nfc_outside_tag_id ]]"
+        # Optional: only accept scans from the trusted phone.
+        # device_id: "<iphone-device-id>"
+    condition:
+      # DISARM on an already disarmed panel would re-run the disarm actor
+      # sequence (lights, power strip, radio); skip it.
+      - condition: state
+        entity_id: alarm_control_panel.werkstatt
+        state:
+          - arming
+          - armed_away
+          - pending
+          - triggered
+    action:
+      - action: alarm_control_panel.alarm_disarm
+        target:
+          entity_id: alarm_control_panel.werkstatt
+
+  - id: werkstatt_nfc_inside_arm
+    alias: "Werkstatt Alarm: inside NFC tag arms away"
+    mode: single
+    max_exceeded: silent
+    trigger:
+      - platform: tag
+        tag_id: "[[ shop_alarm_ha_nfc_inside_tag_id ]]"
+    condition:
+      # ARM_AWAY is a no-op (and logs arm_failed) unless the panel is disarmed;
+      # matching the state machine here keeps the audit stream clean.
+      - condition: state
+        entity_id: alarm_control_panel.werkstatt
+        state: disarmed
+    action:
+      - action: alarm_control_panel.alarm_arm_away
+        target:
+          entity_id: alarm_control_panel.werkstatt

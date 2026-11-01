@@ -7,7 +7,7 @@ flowchart TD
     S["Siri on iPhone / Watch"] --> SC["Shortcut: Perform action"]
     N["NFC tag"] --> APP["HA Companion app"]
     APP --> EV["tag_scanned event"]
-    EV --> AU["HA automation: ha/nfc-tags.yaml"]
+    EV --> AU["HA automation: ha/shop_alarm.yaml.j2"]
     SC --> SVC["alarm_control_panel.werkstatt"]
     AU --> SVC
     SVC --> MQTT["werkstatt/alarm/cmnd"]
@@ -86,20 +86,20 @@ The tags already exist in the app. Check **Settings → Tags** and confirm this 
 
 | Name (suggested) | Tag ID | Physical tag |
 |---|---|---|
-| Werkstatt außen (disarm) | `b9396bf2-a00e-4dee-ac9a-18c2575b98fd` | outside the shop door |
-| Werkstatt innen (arm) | `75ec6013-c3e2-487c-8305-e0ffae4625b2` | inside the shop door |
+| Werkstatt außen (disarm) | `2e0337f0-75b2-41a6-abe5-282648c8a6aa` | outside the shop door |
+| Werkstatt innen (arm) | `14177308-cf20-4d1c-bbab-ffb3e8e98bb0` | inside the shop door |
 
-If you ever replace a physical tag, either write the same ID to the new tag or update the matching ID in `ha/nfc-tags.yaml`.
+If you ever replace a physical tag, either write the same ID to the new tag or update the matching ID in `ha/shop_alarm.yaml.j2`.
 
 ### 2. Verify the tags scan
 
-Hold the top edge of the iPhone against the outside tag, tap the Home Assistant banner, and confirm **Settings → Tags** shows a new scan time for `b9396bf2-…`. Repeat for the inside tag and `75ec6013-…`. If a tag does not scan, rewrite it from the app: **Settings → Companion App → NFC Cards → Write** (older versions call it **NFC Tags**), choose the existing tag, and hold the phone against it until the app confirms.
+Hold the top edge of the iPhone against the outside tag, tap the Home Assistant banner, and confirm **Settings → Tags** shows a new scan time for `2e0337f0-…`. Repeat for the inside tag and `14177308-…`. If a tag does not scan, rewrite it from the app: **Settings → Companion App → NFC Cards → Write** (older versions call it **NFC Tags**), choose the existing tag, and hold the phone against it until the app confirms.
 
 Writing replaces whatever is on the tag. If the tag does not appear in the writer, reopen the app so it fetches the tag list from HA. If a tag opens Safari instead of the HA app, it was not written as an HA tag; rewrite it.
 
 ### 3. Install the automations
 
-The automations are in `ha/nfc-tags.yaml`. Either:
+The automations are in `ha/shop_alarm.yaml.j2` (one HA package: the two helpers plus the notification and tag automations). The shop-alarm deploy in `uhlig-it/infrastructure` renders it to `/opt/homeassistant/packages/shop_alarm.yaml` and removes the hand-managed copies from `automations.yaml`. For a manual install, replace the `[[ ... ]]` placeholders with your values and either:
 
 * append that file to `/opt/homeassistant/automations.yaml` on opus and reload **Developer Tools → YAML → Reload automations**, or
 * paste each automation separately into **Settings → Automations → Create automation → Edit in YAML**.
@@ -122,7 +122,7 @@ Arming is also refused if Frigate is offline, the door state is unknown, or a PI
 
 ## Security notes
 
-* The outside tag is a trigger, not a cryptographic key. The disarm authority is the HA app's login. Any phone signed in to your HA can fire the tag automation, not just yours. To restrict the outside tag to the iPhone, uncomment `device_id:` in `ha/nfc-tags.yaml` and paste the `device_id` from the `tag_scanned` event (Developer Tools → Events → listen to `tag_scanned`, then scan the tag).
+* The outside tag is a trigger, not a cryptographic key. The disarm authority is the HA app's login. Any phone signed in to your HA can fire the tag automation, not just yours. To restrict the outside tag to the iPhone, uncomment `device_id:` in `ha/shop_alarm.yaml.j2` and paste the `device_id` from the `tag_scanned` event (Developer Tools → Events → listen to `tag_scanned`, then scan the tag).
 * The inside tag can only arm and the outside tag can only disarm; keep the automations separate.
 * The automations run with HA system privileges. Do not add unrelated tag IDs to them.
 * The alarm's own audit stream (`werkstatt/alarm/events`) records the resulting `DISARM`/`ARM_AWAY` command, the same as a panel press. The tag scan itself is an HA `tag_scanned` event, not part of shop-alarm's audit.
@@ -135,7 +135,7 @@ Arming is also refused if Frigate is offline, the door state is unknown, or a PI
 | Shortcut fails with a connection error | Tailscale is off, or the HA app's server URL is wrong. Open the HA app and check Settings → Companion App → Server. |
 | The Watch cannot run the shortcut | Confirm it is listed in the Shortcuts app on the Watch. If the Watch delegates to the iPhone, keep the phone nearby/online; if the App Intent is unavailable on watchOS, use the HomeKit Bridge route (see below). |
 | Holding the phone to the tag does nothing | iPhone older than XS/XR/11, the tag is not an HA tag, or the app is not signed in. Try scanning from Settings → Companion App → NFC Cards. |
-| The tag scans but the panel does not change | The tag ID in `ha/nfc-tags.yaml` does not match Settings → Tags, or the automation condition (panel state) blocked it. Open the automation trace. |
+| The tag scans but the panel does not change | The tag ID in `ha/shop_alarm.yaml.j2` does not match Settings → Tags, or the automation condition (panel state) blocked it. Open the automation trace. |
 | Arming does nothing | The state machine refused it: Frigate offline, door unknown, or PIR motion. Check the "Arming refused" push. |
 
 ## Why not HomeKit?
