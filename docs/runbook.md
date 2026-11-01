@@ -38,12 +38,12 @@ The state stays `triggered` until someone **disarms** or **re-arms** it, and the
 If you just want everything to stop, **Disarm does that too** — the panel's Disarm button silences the notifications and the strobe *and* resolves the episode. The `ACK` button above is only for "quiet, but leave it triggered while I review".
 
 1. Home Assistant app → the `Werkstatt` alarm panel card → **Disarm** (`alarm_control_panel.werkstatt`).
-2. NFC tag at either workshop door (the tag automations call the panel's disarm).
-3. iOS shortcut **"Disarm Shop"**.
+2. The outside NFC tag (the phone must be signed in to the HA app; the inside tag arms, it does not disarm). Setup and caveats: `docs/siri-and-nfc.md`.
+3. Siri on the iPhone/Watch: "Hey Siri, Disarm Workshop", or run the same shortcut from the Shortcuts app.
 4. Home Assistant → Developer Tools → Actions → `alarm_control_panel.disarm`, target `entity_id: alarm_control_panel.werkstatt`.
 5. From a shell with broker access: `mosquitto_pub -h <broker> -u <user> -P <pass> -t werkstatt/alarm/cmnd -m DISARM`. This topic is **never retained** — a retained command would replay on every consumer restart.
 
-After disarming: review, fix whatever caused it, and re-arm when you leave (arm from the panel/NFC/iOS, or publish `ARM_AWAY`). Arming runs the 60 s exit delay and switches Frigate to the `armed` profile.
+After disarming: review, fix whatever caused it, and re-arm when you leave (arm from the panel, Siri, or the inside NFC tag; or publish `ARM_AWAY`). Arming runs the 60 s exit delay and switches Frigate to the `armed` profile.
 
 ## The door/exit gotcha (cause of the 2026-09-24 false alarm)
 
@@ -55,6 +55,8 @@ Arming assumes "the door closed ⇒ you have left". If the door was **already op
 4. if you do not disarm within those 30 s → `triggered` (source `entry_delay`).
 
 So arm **after** the door is closed, or arm and leave in one motion (arm → open → close, without re-opening). The state machine is intentionally unchanged here (user decision 2026-09-24); this is a usage case, not a bug.
+
+The inside NFC tag follows the same rule: open the door, scan the tag, step out and close the door (or scan with the door closed and open/close it immediately). Do not arm and then stay inside past the exit delay. Details: `docs/siri-and-nfc.md`.
 
 ## Which trigger was it?
 
